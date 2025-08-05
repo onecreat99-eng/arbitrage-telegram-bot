@@ -11,7 +11,6 @@ alerts_sent_today = 0
 today_date = datetime.utcnow().date()
 
 def fetch_odds(): 
-    # खाली रूप (placeholder) — आपके scraper logic यहाँ आएगा
     return [
         ("ABC vs XYZ", "1xBet", 2.1, "Stake", 2.2, "live")
     ]
@@ -31,7 +30,6 @@ def send_alert(match, b1, o1, b2, o2, profit, match_type):
                   data={"chat_id": CHAT_ID, "text": msg})
 
 while True:
-    global today_date, alerts_sent_today
     now = datetime.utcnow()
     if now.date() != today_date:
         today_date = now.date()

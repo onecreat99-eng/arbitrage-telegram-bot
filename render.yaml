@@ -11,3 +11,6 @@ services:
         sync: false
       - key: CHAT_ID
         sync: false
+    env: 
+      - key: PORT
+        value: 10000

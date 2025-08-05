@@ -1,132 +1,43 @@
 # Trigger auto-deploy on Render
 import os
-import time
-import random
-from datetime import datetime
 from dotenv import load_dotenv
+import time
+import logging
 import requests
-from apscheduler.schedulers.background import BackgroundScheduler
 
+# ✅ Logger Setup
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
+
+# ✅ Load .env variables
 load_dotenv()
-
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-# Count for daily limit
-alert_count = 0
+# 🔍 Debug logs
+logging.info("✅ .env file loaded")
+logging.info(f"🤖 BOT_TOKEN: {'Found' if BOT_TOKEN else 'Missing'}")
+logging.info(f"💬 CHAT_ID: {'Found' if CHAT_ID else 'Missing'}")
 
-# Max alerts per day
-MAX_ALERTS_PER_DAY = 8
-
-# Minimum profit %
-MIN_PROFIT = 10.0
-
-def get_arbitrage_opportunities():
-    # ⛏️ Dummy arbitrage logic (replace with real scraping)
-    opportunities = []
-
-    # Simulated data
-    bookmakers = ["⚫ 1xBet", "⚫ Mostbet", "⚫ Stake", "⚫ BC.Game", "⚫ VBet"]
-    market = "Match Winner"
-    teams = ["Team A vs Team B", "Team C vs Team D", "Team E vs Team F"]
-
-    if random.random() < 0.5:  # Random chance to find opportunity
-        match = random.choice(teams)
-        book1 = random.choice(bookmakers)
-        book2 = random.choice(bookmakers)
-        odds1 = round(random.uniform(2.0, 3.5), 2)
-        odds2 = round(random.uniform(2.0, 3.5), 2)
-        profit = (1 / odds1 + 1 / odds2)
-
-        if profit < 1:
-            profit_percent = round((1 - profit) * 100, 2)
-            opportunities.append({
-                "match": match,
-                "market": market,
-                "book1": book1,
-                "odds1": odds1,
-                "book2": book2,
-                "odds2": odds2,
-                "profit_percent": profit_percent,
-                "same_bookmaker": book1 == book2,
-                "match_type": random.choice(["🟢 Live", "🔵 Prematch"])
-            })
-
-    return opportunities
-
+# 📤 Telegram Function
 def send_telegram_message(message):
+    logging.info("📨 Sending message to Telegram...")
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
+    payload = {"chat_id": CHAT_ID, "text": message}
     try:
-        requests.post(url, data=payload)
+        response = requests.post(url, data=payload)
+        logging.info(f"✅ Telegram response: {response.status_code}")
     except Exception as e:
-        print(f"Error sending Telegram message: {e}")
+        logging.error(f"❌ Telegram send error: {e}")
 
-def check_and_send_alerts():
-    global alert_count
+# 🚀 Startup message
+send_telegram_message("✅ Bot started successfully and is now running...")
 
-    if alert_count >= MAX_ALERTS_PER_DAY:
-        print("✅ Daily limit reached. No more alerts today.")
-        return
+# 🔄 Test loop (fake alert every 60 sec)
+while True:
+    logging.info("🔁 Checking for arbitrage opportunities...")
 
-    opportunities = get_arbitrage_opportunities()
+    fake_alert = "🟢 LIVE Arbitrage Found!\n⚫ 1xBet: 2.1\n⚫ Stake: 2.2\n💰 Profit: 10.5%\n⏰ Match: ABC vs XYZ"
+    send_telegram_message(fake_alert)
 
-    for opp in opportunities:
-        if opp["profit_percent"] >= MIN_PROFIT and alert_count < MAX_ALERTS_PER_DAY:
-            now = datetime.now().strftime("%d-%m-%Y %I:%M %p")
-            message = (
-                f"{opp['match_type']} *{opp['match']}*\n\n"
-                f"*Market:* {opp['market']}\n"
-                f"{opp['book1']} - `{opp['odds1']}`\n"
-                f"{opp['book2']} - `{opp['odds2']}`\n"
-                f"*Profit:* {opp['profit_percent']}%\n"
-                f"*Same Bookmaker:* {'🔴 Yes' if opp['same_bookmaker'] else '🟢 No'}\n"
-                f"*Time:* {now}"
-            )
-            send_telegram_message(message)
-            alert_count += 1
-            print(f"✅ Sent Alert {alert_count}")
-
-def reset_daily_count():
-    global alert_count
-    alert_count = 0
-    print("🔁 Daily alert counter reset.")
-
-def main():
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(check_and_send_alerts, 'interval', minutes=10)
-    scheduler.add_job(reset_daily_count, 'cron', hour=0, minute=0)  # Midnight reset
-    scheduler.start()
-
-    print("🚀 Arbitrage bot is running with APScheduler...")
-
-    try:
-        while True:
-            time.sleep(1)
-    except (KeyboardInterrupt, SystemExit):
-        scheduler.shutdown()
-        print("⛔ Bot stopped.")
-
-if __name__ == "__main__":
-    main()
-# -----------------------------
-# 🟢 Dummy web server for Render
-# -----------------------------
-from flask import Flask
-import threading
-
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "✅ Arbitrage Telegram Bot is running!"
-
-def run_web_server():
-    app.run(host='0.0.0.0', port=10000)
-
-# Start dummy web server
-threading.Thread(target=run_web_server).start()
+    logging.info("⏸️ Waiting 60 seconds before next check...")
+    time.sleep(60)

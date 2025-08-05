@@ -1,36 +1,28 @@
 # Trigger auto-deploy on Render
-from flask import Flask
-from telegram import Bot
-import threading
-import time
-import os
+main.py
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+import os import requests from datetime import datetime from telegram import Bot
 
-bot = Bot(token=BOT_TOKEN)
+Telegram setup
 
-app = Flask(__name__)
+BOT_TOKEN = os.getenv("BOT_TOKEN") CHAT_ID = os.getenv("CHAT_ID") bot = Bot(token=BOT_TOKEN)
 
-# 🟢 Fake web server for Render
-@app.route('/')
-def home():
-    return 'Bot is running!'
+Dummy arbitrage data (replace with real scraping logic)
 
-# 🟢 Telegram alert loop
-def alert_loop():
-    while True:
-        try:
-            message = "🟢 LIVE Arbitrage Found!\n⚫ 1xBet: 2.1\n⚫ Stake: 2.2\n💰 Profit: 10.5%\n⏰ Match: ABC vs XYZ"
-            bot.send_message(chat_id=CHAT_ID, text=message)
-            print("Message sent!")
-        except Exception as e:
-            print("Error:", e)
-        time.sleep(3600)  # Alert every 1 hour (adjust as needed)
+def get_arbitrage_data(): return { "type": "LIVE", "bookmakers": [ {"name": "1xBet", "odds": 2.1}, {"name": "Stake", "odds": 2.2} ], "profit": 10.5, "match": "ABC vs XYZ" }
 
-# 🧵 Start bot loop in background
-threading.Thread(target=alert_loop).start()
+def send_alert(data): emojis = { "LIVE": "🟢", "PREMATCH": "🔵", "SAME": "🔴", "BOOK": "⚫", "PROFIT": "💰", "TIME": "⏰" }
 
-# 🟢 Run fake web server to satisfy Render
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+time_str = datetime.now().strftime("%d-%m-%Y %I:%M %p")
+
+message = f"{emojis[data['type']]} {data['type']} Arbitrage Found!\n"
+for bm in data['bookmakers']:
+    message += f"{emojis['BOOK']} {bm['name']}: {bm['odds']}\n"
+message += f"{emojis['PROFIT']} Profit: {data['profit']}%\n"
+message += f"{emojis['TIME']} Match: {data['match']}\n"
+message += f"{time_str}"
+
+bot.send_message(chat_id=CHAT_ID, text=message)
+
+if name == "main": data = get_arbitrage_data() if data['profit'] >= 10: send_alert(data)
+

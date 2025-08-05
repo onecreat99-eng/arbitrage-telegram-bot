@@ -4,7 +4,7 @@ import requests
 from telegram import Bot 
 from datetime import datetime
 
-Load .env manually if needed (for local testing)
+# Load .env manually if needed (for local testing)
 
 from dotenv import load_dotenv load_dotenv()
 

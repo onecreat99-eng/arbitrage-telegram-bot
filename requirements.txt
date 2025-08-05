@@ -1,5 +1,2 @@
-python-dotenv
 requests
-apscheduler
-flask
-waitress
+python-dotenv

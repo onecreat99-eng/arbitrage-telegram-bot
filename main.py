@@ -113,3 +113,14 @@ def main():
 
 if __name__ == "__main__":
     main()
+# Keep the app alive (fake web server for Render)
+from flask import Flask
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running"
+
+if __name__ == '__main__':
+    from waitress import serve
+    serve(app, host='0.0.0.0', port=10000)

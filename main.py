@@ -1,24 +1,8 @@
 import os
-import telegram
-from dotenv import load_dotenv
-import time
-
-# ✅ Load environment variables
-load_dotenv()
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
-
-bot = telegram.Bot(token=BOT_TOKEN)
-
-while True:
-    message = "✅ Bot is working! Arbitrage alert will be added here."
-    bot.send_message(chat_id=CHAT_ID, text=message)
-    time.sleep(3600)  # Sends message every hour (for demo)
-import os
 import requests
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -33,5 +17,5 @@ def send_telegram_message(message):
     response = requests.post(url, data=payload)
     print(response.text)
 
-# 🟢 Test message
+# ✅ Test message
 send_telegram_message("✅ Bot is working and connected to Telegram!")

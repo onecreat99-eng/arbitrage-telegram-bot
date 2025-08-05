@@ -1,23 +1,23 @@
 # Trigger auto-deploy on Render
-import os 
-import time 
-import requests 
-from telegram import Bot 
+import os
+import time
+import requests
+from telegram import Bot
 from datetime import datetime
 
 # Load .env manually if needed (for local testing)
-
-from dotenv import load_dotenv 
+from dotenv import load_dotenv
 load_dotenv()
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN") 
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
 bot = Bot(token=TELEGRAM_TOKEN)
 
-Counter for daily limit
-
-alerts_sent_today = 0 max_alerts_per_day = 8 last_reset_day = datetime.now().day
+# Counter for daily limit
+alerts_sent_today = 0
+max_alerts_per_day = 8
+last_reset_day = datetime.now().day
 
 Placeholder: Replace with real scraped data from each bookmaker
 

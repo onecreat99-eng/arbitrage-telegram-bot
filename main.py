@@ -7,7 +7,8 @@ from datetime import datetime
 
 # Load .env manually if needed (for local testing)
 
-from dotenv import load_dotenv load_dotenv()
+from dotenv import load_dotenv 
+load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN") CHAT_ID = os.getenv("CHAT_ID")
 

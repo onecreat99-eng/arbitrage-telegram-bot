@@ -1,15 +1,14 @@
+# onexbet_live_scraper.py
+
 def get_1xbet_live_odds():
+    # Dummy example, replace with real scraping later
     return [
         {
-            "team1": "Team A",
-            "team2": "Team B",
-            "odds1": 2.5,
-            "odds2": 2.6
-        },
-        {
-            "team1": "Team C",
-            "team2": "Team D",
-            "odds1": 1.8,
-            "odds2": 2.2
+            "match": "Team A vs Team B",
+            "market": "Match Winner",
+            "bookmaker": "1xBet",
+            "odds": {"Team A": 2.1, "Team B": 1.9},
+            "profit_percent": 12.5,
+            "is_live": True
         }
     ]

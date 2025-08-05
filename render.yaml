@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: arbitrage-telegram-bot
+    env: python
+    plan: free
+    buildCommand: ""
+    startCommand: "python main.py"
+    envVars:
+      - key: BOT_TOKEN
+        fromDotEnv: true
+      - key: CHAT_ID
+        fromDotEnv: true

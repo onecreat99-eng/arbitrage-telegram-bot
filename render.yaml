@@ -1,6 +1,11 @@
 services:
   - type: worker
-    name: arbitrage-bot
-    env: python
+    name: arbitrage-telegram-bot
+    runtime: python
     buildCommand: ""
-    startCommand: python main.py
+    startCommand: "python main.py"
+    envVars:
+      - key: BOT_TOKEN
+        fromEnvVar: BOT_TOKEN
+      - key: CHAT_ID
+        fromEnvVar: CHAT_ID

@@ -1,36 +1,22 @@
 # Trigger auto-deploy on Render
-import os
-import time
-import threading
-import requests
 from datetime import datetime
-from flask import Flask
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+def send_alert(match, bookmaker1, odds1, bookmaker2, odds2, profit_percent, match_type, bot, chat_id):
+    now = datetime.now().strftime('%I:%M %p')
 
-app = Flask(__name__)
+    # 🟢 or 🔵 based on match type
+    if match_type.lower() == "live":
+        match_type_emoji = "🟢 LIVE Arbitrage Found!"
+    else:
+        match_type_emoji = "🔵 PREMATCH Arbitrage Found!"
 
-def send_alert(message):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML"
-    }
-    requests.post(url, data=payload)
+    message = (
+        f"{match_type_emoji}\n"
+        f"⚫ {bookmaker1}: {odds1}\n"
+        f"⚫ {bookmaker2}: {odds2}\n"
+        f"💰 Profit: {profit_percent:.1f}%\n"
+        f"⏰ Match: {match}\n"
+        f"🕒 {now}"
+    )
 
-def background_loop():
-    while True:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        send_alert(f"🤖 Bot चालू है!\n🕒 {now}")
-        time.sleep(60)
-
-@app.route('/')
-def home():
-    return "Bot is running!"
-
-# Threading se background task run karenge
-if __name__ == '__main__':
-    threading.Thread(target=background_loop).start()
-    app.run(host='0.0.0.0', port=10000)
+    bot.send_message(chat_id=chat_id, text=message)

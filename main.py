@@ -1,8 +1,7 @@
 # Trigger auto-deploy on Render
 # main.py
-
 import os
-import time
+import requests
 from datetime import datetime
 from telegram import Bot
 
@@ -11,10 +10,10 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 bot = Bot(token=BOT_TOKEN)
 
-# Dummy arbitrage data (replace with real scraping logic)
+# Dummy arbitrage data (Replace with real logic later)
 def get_arbitrage_data():
     return {
-        "type": "LIVE",
+        "type": "LIVE",  # LIVE या PREMATCH
         "bookmakers": [
             {"name": "1xBet", "odds": 2.1},
             {"name": "Stake", "odds": 2.2}
@@ -23,31 +22,27 @@ def get_arbitrage_data():
         "match": "ABC vs XYZ"
     }
 
+# Telegram पर alert भेजने का function
 def send_alert(data):
     emojis = {
-        "LIVE": "🟢",
-        "PREMATCH": "🔵",
-        "SAME": "🔴",
-        "BOOK": "⚫",
-        "PROFIT": "💰",
-        "TIME": "⏰"
+        "LIVE": "🟢", "PREMATCH": "🔵",
+        "SAME": "🔴", "BOOK": "⚫",
+        "PROFIT": "💰", "TIME": "⏰"
     }
-
     time_str = datetime.now().strftime("%d-%m-%Y %I:%M %p")
 
-    message = f"{emojis[data['type']]} {data['type']} Arbitrage Found!\n"
+    message = f"{emojis[data['type']]} {data['type']} Arbitrage मिला!\n"
     for bm in data['bookmakers']:
         message += f"{emojis['BOOK']} {bm['name']}: {bm['odds']}\n"
-    message += f"{emojis['PROFIT']} Profit: {data['profit']}%\n"
-    message += f"{emojis['TIME']} Match: {data['match']}\n"
+
+    message += f"{emojis['PROFIT']} प्रॉफिट: {data['profit']}%\n"
+    message += f"{emojis['TIME']} मैच: {data['match']}\n"
     message += f"{time_str}"
 
     bot.send_message(chat_id=CHAT_ID, text=message)
 
-# Auto run every 5 minutes
+# MAIN CODE
 if __name__ == "__main__":
-    while True:
-        data = get_arbitrage_data()
-        if data['profit'] >= 10:
-            send_alert(data)
-        time.sleep(300)  # 5 minutes
+    data = get_arbitrage_data()
+    if data['profit'] >= 10:
+        send_alert(data)

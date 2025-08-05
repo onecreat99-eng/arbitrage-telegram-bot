@@ -1,4 +1,4 @@
 requests
 APScheduler
 python-telegram-bot
-imgHDR
+

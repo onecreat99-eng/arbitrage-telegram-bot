@@ -16,20 +16,20 @@ MAX_ALERTS_PER_DAY = 4
 alerts_sent_today = 0
 today_date = datetime.utcnow().date()
 
-# Flask web app for Render
+# Flask app
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Telegram arbitrage bot running ✅"
+    return "✅ Telegram Arbitrage Bot is running!"
 
-def send_alert():
+def send_alerts():
     global alerts_sent_today, today_date
 
     while True:
         now = datetime.utcnow()
 
-        # Reset daily count at midnight UTC
+        # Reset alert count at midnight
         if now.date() != today_date:
             today_date = now.date()
             alerts_sent_today = 0
@@ -45,4 +45,11 @@ def send_alert():
             bot.send_message(chat_id=CHAT_ID, text=message, parse_mode='Markdown')
             alerts_sent_today += 1
 
-        time.sleep(3600)  # Wait 1 hour before next alert
+        time.sleep(3600)
+
+# Start alerts in background
+threading.Thread(target=send_alerts).start()
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)

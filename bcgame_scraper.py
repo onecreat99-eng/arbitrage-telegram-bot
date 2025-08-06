@@ -14,7 +14,7 @@ def get_bcgame_odds(live=True):
                 "market": match.get("market", "Unknown Market"),
                 "bookmaker": "BC.Game",
                 "odds": match.get("odds", {}),
-                "is_live": live
+                "is_live": live,
             })
         return results
     except Exception as e:

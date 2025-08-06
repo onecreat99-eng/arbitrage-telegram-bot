@@ -1,71 +1,57 @@
 # Trigger auto-deploy on Render
-from onexbet_scraper import get_onexbet_live_odds, get_onexbet_prematch_odds
-from stake_scraper import get_stake_live_odds, get_stake_prematch_odds
-from vbet_scraper import get_vbet_live_odds, get_vbet_prematch_odds
-from bcgame_scraper import get_bcgame_live_odds, get_bcgame_prematch_odds
-from mostbet_scraper import get_mostbet_live_odds, get_mostbet_prematch_odds
-from telegram_alert import send_telegram_message
-import datetime
+import time from onexbet import get_onexbet_live_odds, get_onexbet_prematch_odds from stake import get_stake_live_odds, get_stake_prematch_odds from bcgame import get_bcgame_live_odds, get_bcgame_prematch_odds from mostbet import get_mostbet_live_odds, get_mostbet_prematch_odds from telegram_alert import send_telegram_alert
 
-MAX_ALERTS_PER_DAY = 8
-PROFIT_THRESHOLD = 10.0
+def find_arbitrage_opportunities(all_odds): alerts_sent = 0 max_alerts = 4 now = time.strftime('%d-%m-%Y %H:%M:%S')
 
-sent_alerts = []
-
-def is_duplicate(alert):
-    for a in sent_alerts:
-        if a['match'] == alert['match'] and a['market'] == alert['market']:
-            return True
-    return False
-
-def check_arbitrage(odds_data):
-    opportunities = []
-    for data in odds_data:
-        odds = list(data['odds'].values())
-        if len(odds) < 2:
+for i, match1 in enumerate(all_odds):
+    for j, match2 in enumerate(all_odds):
+        if i >= j:
             continue
-        try:
-            inverse_sum = sum(1/o for o in odds if o > 0)
-            profit_percent = round((1 - inverse_sum) * 100, 2)
-            if profit_percent >= PROFIT_THRESHOLD:
-                data['profit_percent'] = profit_percent
-                opportunities.append(data)
-        except:
+        if match1['match'] != match2['match']:
             continue
-    return opportunities
 
-def format_alert(data):
-    match_type = "🟢 Live" if data.get('is_live') else "🔵 Prematch"
-    same_bookmaker = "🔴 Same Bookmaker" if len(set(data['odds'].keys())) == 1 else ""
-    odds_text = " ".join([f"⚫{k}: {v}" for k, v in data['odds'].items()])
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    return f"{match_type} | {same_bookmaker}\n🏟️ Match: {data['match']}\n🎯 Market: {data['market']}\n💰 Odds: {odds_text}\n📈 Profit: {data['profit_percent']}%\n🕒 Time: {now}"
+        for bet1 in match1['odds']:
+            for bet2 in match2['odds']:
+                if bet1['market'] != bet2['market']:
+                    continue
+                if bet1['outcome'] == bet2['outcome']:
+                    continue
 
-def main():
-    global sent_alerts
-    sent_alerts = []
-    all_odds = []
-    all_odds += get_onexbet_live_odds()
-    all_odds += get_onexbet_prematch_odds()
-    all_odds += get_stake_live_odds()
+                try:
+                    o1 = float(bet1['odds'])
+                    o2 = float(bet2['odds'])
+                    profit_percent = (1 / o1 + 1 / o2)
+
+                    if profit_percent < 1:
+                        profit = round((1 - profit_percent) * 100, 2)
+                        if profit >= 10 and alerts_sent < max_alerts:
+                            same_bookmaker = match1['bookmaker'] == match2['bookmaker']
+                            match_type = match1['match_type']
+                            alert_message = (
+                                f"{'🟢' if match_type == 'Live' else '🔵'} {match1['match']}\n"
+                                f"📊 Market: {bet1['market']}\n"
+                                f"⚫ {match1['bookmaker']}: {bet1['outcome']} @ {o1}\n"
+                                f"⚫ {match2['bookmaker']}: {bet2['outcome']} @ {o2}\n"
+                                f"💰 Profit: {profit}%\n"
+                                f"{'🔴 Same Bookmaker' if same_bookmaker else ''}\n"
+                                f"🕒 {now}"
+                            )
+                            send_telegram_alert(alert_message)
+                            alerts_sent += 1
+                except:
+                    continue
+
+if name == "main": while True: all_odds = [] all_odds += get_onexbet_live_odds() all_odds += get_onexbet_prematch_odds()
+
+all_odds += get_stake_live_odds()
     all_odds += get_stake_prematch_odds()
-    all_odds += get_vbet_live_odds()
-    all_odds += get_vbet_prematch_odds()
+
     all_odds += get_bcgame_live_odds()
     all_odds += get_bcgame_prematch_odds()
+
     all_odds += get_mostbet_live_odds()
     all_odds += get_mostbet_prematch_odds()
 
-    arbitrage_opportunities = check_arbitrage(all_odds)
-    alerts_sent = 0
-    for opportunity in arbitrage_opportunities:
-        if alerts_sent >= MAX_ALERTS_PER_DAY:
-            break
-        if not is_duplicate(opportunity):
-            msg = format_alert(opportunity)
-            send_telegram_message(msg)
-            sent_alerts.append(opportunity)
-            alerts_sent += 1
+    find_arbitrage_opportunities(all_odds)
+    time.sleep(300)  # Check every 5 minutes
 
-if __name__ == "__main__":
-    main()

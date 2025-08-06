@@ -1,82 +1,47 @@
 # Trigger auto-deploy on Render
 import os
 import requests
-from datetime import datetime
 from dotenv import load_dotenv
-from 1xbet_scraper import get_1xbet_live_odds, get_1xbet_prematch_odds
-from bcgame_scraper import get_bcgame_live_odds, get_bcgame_prematch_odds
+from oddspedia import get_oddspedia_odds
+from oddsam import get_oddsam_odds
+from utils import calculate_profit, normalize_team_name
+from datetime import datetime
 
 load_dotenv()
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
-PROFIT_THRESHOLD = 10.0
-MAX_ALERTS_PER_DAY = 8
-sent_alerts = []
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-def send_telegram_message(text):
+def send_telegram_alert(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"}
-    try:
-        requests.post(url, json=payload)
-    except Exception as e:
-        print("Telegram Error:", e)
-
-def is_duplicate(alert):
-    return any(a['match'] == alert['match'] and a['market'] == alert['market'] for a in sent_alerts)
-
-def find_arbitrage(all_odds):
-    opportunities = []
-    for i in range(len(all_odds)):
-        for j in range(i + 1, len(all_odds)):
-            a = all_odds[i]
-            b = all_odds[j]
-            if a['match'] == b['match'] and a['market'] == b['market'] and a['bookmaker'] != b['bookmaker']:
-                try:
-                    inv1 = 1 / float(list(a['odds'].values())[0])
-                    inv2 = 1 / float(list(b['odds'].values())[0])
-                    total = inv1 + inv2
-                    if total < 1:
-                        profit = round((1 - total) * 100, 2)
-                        if profit >= PROFIT_THRESHOLD:
-                            opportunities.append({
-                                "match": a['match'],
-                                "market": a['market'],
-                                "odds": f"⚫ {a['bookmaker']}: {list(a['odds'].values())[0]} | ⚫ {b['bookmaker']}: {list(b['odds'].values())[0]}",
-                                "profit": profit,
-                                "is_live": a['is_live'] or b['is_live']
-                            })
-                except:
-                    continue
-    return opportunities
-
-def format_alert(opportunity):
-    emoji = "🟢 Live" if opportunity['is_live'] else "🔵 Prematch"
-    time_str = datetime.now().strftime("%d-%m-%Y %I:%M %p")
-    return f"""{emoji} Arbitrage Found!
-🏟 Match: {opportunity['match']}
-🎯 Market: {opportunity['market']}
-💰 Odds: {opportunity['odds']}
-📈 Profit: {opportunity['profit']}%
-⏰ Time: {time_str}"""
+    payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
+    requests.post(url, data=payload)
 
 def main():
-    global sent_alerts
-    all_odds = []
-    all_odds += get_1xbet_live_odds()
-    all_odds += get_1xbet_prematch_odds()
-    all_odds += get_bcgame_live_odds()
-    all_odds += get_bcgame_prematch_odds()
+    oddspedia_data = get_oddspedia_odds()
+    oddsam_data = get_oddsam_odds()
 
-    arbitrages = find_arbitrage(all_odds)
     alerts_sent = 0
-    for arb in arbitrages:
-        if alerts_sent >= MAX_ALERTS_PER_DAY:
-            break
-        if not is_duplicate(arb):
-            send_telegram_message(format_alert(arb))
-            sent_alerts.append(arb)
-            alerts_sent += 1
+    for match_a in oddspedia_data:
+        for match_b in oddsam_data:
+            if normalize_team_name(match_a["match"]) == normalize_team_name(match_b["match"]):
+                for team in match_a["odds"]:
+                    if team in match_b["odds"]:
+                        profit = calculate_profit(match_a["odds"][team], match_b["odds"][team])
+                        if profit >= 10:
+                            match_type = "🟢 Live" if match_a["type"].lower() == "live" else "🔵 Prematch"
+                            time_now = datetime.now().strftime("%H:%M:%S %d-%m-%Y")
+                            message = (
+                                f"{match_type} Arbitrage Found!\n"
+                                f"⚫ {match_a['bookmaker']}: {match_a['odds'][team]}\n"
+                                f"⚫ {match_b['bookmaker']}: {match_b['odds'][team]}\n"
+                                f"💰 Profit: {profit}%\n"
+                                f"⏰ {time_now}"
+                            )
+                            send_telegram_alert(message)
+                            alerts_sent += 1
+                            if alerts_sent >= 8:
+                                return
 
 if __name__ == "__main__":
     main()

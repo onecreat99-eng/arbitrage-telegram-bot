@@ -50,3 +50,7 @@ def send_alert(data):
 if __name__ == "__main__":
     data = get_arbitrage_data()
     send_alert(data)
+import time
+
+while True:
+    time.sleep(60)

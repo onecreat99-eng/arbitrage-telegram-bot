@@ -1,112 +1,109 @@
 # Trigger auto-deploy on Render
+import time
+import datetime
 import os
-from datetime import datetime
 from telegram import Bot
-from dotenv import load_dotenv
-
-from 1xbet_scraper import get_onexbet_live_odds, get_onexbet_prematch_odds
+from onexbet_scraper import get_onexbet_live_odds, get_onexbet_prematch_odds
 from stake_scraper import get_stake_live_odds, get_stake_prematch_odds
-from vbet_scraper import get_vbet_live_odds, get_vbet_prematch_odds
 from bcgame_scraper import get_bcgame_live_odds, get_bcgame_prematch_odds
+from vbet_scraper import get_vbet_live_odds, get_vbet_prematch_odds
 from mostbet_scraper import get_mostbet_live_odds, get_mostbet_prematch_odds
 
-# Load environment variables
-load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+# Telegram Setup
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-bot = Bot(token=BOT_TOKEN)
-
-# Alert limit
+# Alert Control
 MAX_ALERTS_PER_DAY = 8
 alert_count = 0
-last_reset_date = datetime.now().date()
+last_reset_date = datetime.date.today()
 
-def reset_daily_count():
-    global alert_count, last_reset_date
-    today = datetime.now().date()
-    if today != last_reset_date:
-        alert_count = 0
-        last_reset_date = today
+# Format Bookmaker Name
+def format_bookmaker(name):
+    return f"⚫ {name}"
 
-def calculate_arbitrage(odds_dict):
-    try:
-        inv_sum = sum(1 / max(odds.values()) for odds in odds_dict)
-        profit_percent = (1 - inv_sum) * 100
-        return round(profit_percent, 2)
-    except:
-        return -100.0
-
-def send_alert(match, market, best_odds, profit_percent, is_live, same_bookmaker):
+# Send Telegram Alert
+def send_alert(opportunity):
     global alert_count
     if alert_count >= MAX_ALERTS_PER_DAY:
         return
 
-    time_str = datetime.now().strftime("%H:%M:%S %d-%m-%Y")
-    match_type = "🟢 Live" if is_live else "🔵 Prematch"
-    same_flag = "🔴 Same Bookmaker" if same_bookmaker else "⚪ Different Bookmakers"
+    match = opportunity['match']
+    market = opportunity['market']
+    bookmaker = format_bookmaker(opportunity['bookmaker'])
+    odds = opportunity['odds']
+    profit = opportunity['profit_percent']
+    is_live = opportunity['is_live']
+    same_bookmaker = opportunity.get('same_bookmaker', False)
 
-    odds_str = "\n".join([f"⚫ {book}: {odd}" for book, odd in best_odds.items()])
+    status_emoji = "🟢" if is_live else "🔵"
+    same_bookie_emoji = "🔴" if same_bookmaker else "⚪"
+    now = datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+
     message = (
-        f"{match_type} Arbitrage Alert 📢\n"
-        f"📍 Match: {match}\n"
-        f"📊 Market: {market}\n"
-        f"{odds_str}\n"
-        f"💰 Profit: {profit_percent:.2f}%\n"
-        f"{same_flag}\n"
-        f"🕒 {time_str}"
+        f"{status_emoji} *Arbitrage Opportunity!*\n\n"
+        f"*Match:* `{match}`\n"
+        f"*Market:* `{market}`\n"
+        f"*Odds:* `{odds}`\n"
+        f"*Profit:* `{profit:.2f}%`\n"
+        f"*Type:* {'Live' if is_live else 'Prematch'}\n"
+        f"*Bookmaker:* {bookmaker}\n"
+        f"{same_bookie_emoji} *Same Bookmaker:* `{same_bookmaker}`\n"
+        f"🕒 `{now}`"
     )
 
-    bot.send_message(chat_id=CHAT_ID, text=message)
+    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode='Markdown')
     alert_count += 1
 
+# Reset alerts daily
+def reset_alert_count_if_needed():
+    global alert_count, last_reset_date
+    today = datetime.date.today()
+    if today != last_reset_date:
+        alert_count = 0
+        last_reset_date = today
+
+# Check for arbitrage opportunities
+def find_arbitrage_opportunities(all_odds):
+    opportunities = []
+    for data in all_odds:
+        odds = list(data["odds"].values())
+        if len(odds) < 2:
+            continue
+        inv_sum = sum(1 / o for o in odds if o > 0)
+        profit_percent = (1 - inv_sum) * 100
+        if profit_percent > 10:
+            data["profit_percent"] = profit_percent
+            data["same_bookmaker"] = len(set(data["odds"].keys())) == 1
+            opportunities.append(data)
+    return opportunities
+
+# Combine all scraper odds
 def get_all_odds():
     return (
-        get_onexbet_live_odds() + get_onexbet_prematch_odds() +
-        get_stake_live_odds() + get_stake_prematch_odds() +
-        get_vbet_live_odds() + get_vbet_prematch_odds() +
-        get_bcgame_live_odds() + get_bcgame_prematch_odds() +
-        get_mostbet_live_odds() + get_mostbet_prematch_odds()
+        get_onexbet_live_odds() +
+        get_onexbet_prematch_odds() +
+        get_stake_live_odds() +
+        get_stake_prematch_odds() +
+        get_bcgame_live_odds() +
+        get_bcgame_prematch_odds() +
+        get_vbet_live_odds() +
+        get_vbet_prematch_odds() +
+        get_mostbet_live_odds() +
+        get_mostbet_prematch_odds()
     )
 
+# Main Execution
 def main():
-    reset_daily_count()
+    reset_alert_count_if_needed()
     all_odds = get_all_odds()
-
-    match_map = {}
-
-    for entry in all_odds:
-        match_key = (entry["match"], entry["market"])
-        if match_key not in match_map:
-            match_map[match_key] = []
-        match_map[match_key].append(entry)
-
-    for (match, market), entries in match_map.items():
-        odds_list = [e["odds"] for e in entries]
-        if len(odds_list) < 2:
-            continue
-
-        best_odds = {}
-        used_books = set()
-
-        for outcome in ["1", "X", "2"]:
-            best = 0
-            best_book = None
-            for entry in entries:
-                for book, odd in entry["odds"].items():
-                    if outcome in book and odd > best:
-                        best = odd
-                        best_book = book
-            if best_book:
-                best_odds[best_book] = best
-                used_books.add(best_book.split(" ")[0])  # Bookmaker name before bracket
-
-        if len(best_odds) == 3:
-            profit = calculate_arbitrage(list(best_odds.values()))
-            if profit > 10:
-                is_live = any(e["is_live"] for e in entries)
-                same_bookmaker = len(used_books) == 1
-                send_alert(match, market, best_odds, profit, is_live, same_bookmaker)
+    opportunities = find_arbitrage_opportunities(all_odds)
+    for opp in opportunities:
+        if alert_count < MAX_ALERTS_PER_DAY:
+            send_alert(opp)
+        else:
+            break
 
 if __name__ == "__main__":
     main()

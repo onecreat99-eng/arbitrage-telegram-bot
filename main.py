@@ -1,57 +1,82 @@
 # Trigger auto-deploy on Render
-import time from onexbet import get_onexbet_live_odds, get_onexbet_prematch_odds from stake import get_stake_live_odds, get_stake_prematch_odds from bcgame import get_bcgame_live_odds, get_bcgame_prematch_odds from mostbet import get_mostbet_live_odds, get_mostbet_prematch_odds from telegram_alert import send_telegram_alert
+import time
+from onexbet_scraper import get_onexbet_live_odds, get_onexbet_prematch_odds
+from stake_scraper import get_stake_live_odds, get_stake_prematch_odds
+from bcgame_scraper import get_bcgame_live_odds, get_bcgame_prematch_odds
+from mostbet_scraper import get_mostbet_live_odds, get_mostbet_prematch_odds
+from telegram_alert import send_telegram_alert
 
-def find_arbitrage_opportunities(all_odds): alerts_sent = 0 max_alerts = 4 now = time.strftime('%d-%m-%Y %H:%M:%S')
+def find_arbitrage_opportunities(bookmaker_data):
+    opportunities = []
 
-for i, match1 in enumerate(all_odds):
-    for j, match2 in enumerate(all_odds):
-        if i >= j:
-            continue
-        if match1['match'] != match2['match']:
-            continue
+    for i in range(len(bookmaker_data)):
+        for j in range(i + 1, len(bookmaker_data)):
+            data1 = bookmaker_data[i]
+            data2 = bookmaker_data[j]
 
-        for bet1 in match1['odds']:
-            for bet2 in match2['odds']:
-                if bet1['market'] != bet2['market']:
-                    continue
-                if bet1['outcome'] == bet2['outcome']:
-                    continue
+            if data1["match"].lower() == data2["match"].lower():
+                for odd1 in data1["odds"]:
+                    for odd2 in data2["odds"]:
+                        if (
+                            odd1["market"].lower() == odd2["market"].lower()
+                            and odd1["outcome"].lower() != odd2["outcome"].lower()
+                        ):
+                            try:
+                                o1 = float(odd1["odds"])
+                                o2 = float(odd2["odds"])
 
-                try:
-                    o1 = float(bet1['odds'])
-                    o2 = float(bet2['odds'])
-                    profit_percent = (1 / o1 + 1 / o2)
+                                profit_percent = (1 / o1 + 1 / o2)
+                                if profit_percent < 1:
+                                    profit = round((1 - profit_percent) * 100, 2)
+                                    opportunities.append({
+                                        "match": data1["match"],
+                                        "market": odd1["market"],
+                                        "outcome_1": odd1["outcome"],
+                                        "odds_1": o1,
+                                        "bookmaker_1": data1["bookmaker"],
+                                        "outcome_2": odd2["outcome"],
+                                        "odds_2": o2,
+                                        "bookmaker_2": data2["bookmaker"],
+                                        "match_type": data1["match_type"],
+                                        "profit_percent": profit
+                                    })
+                            except:
+                                continue
+    return opportunities
 
-                    if profit_percent < 1:
-                        profit = round((1 - profit_percent) * 100, 2)
-                        if profit >= 10 and alerts_sent < max_alerts:
-                            same_bookmaker = match1['bookmaker'] == match2['bookmaker']
-                            match_type = match1['match_type']
-                            alert_message = (
-                                f"{'🟢' if match_type == 'Live' else '🔵'} {match1['match']}\n"
-                                f"📊 Market: {bet1['market']}\n"
-                                f"⚫ {match1['bookmaker']}: {bet1['outcome']} @ {o1}\n"
-                                f"⚫ {match2['bookmaker']}: {bet2['outcome']} @ {o2}\n"
-                                f"💰 Profit: {profit}%\n"
-                                f"{'🔴 Same Bookmaker' if same_bookmaker else ''}\n"
-                                f"🕒 {now}"
-                            )
-                            send_telegram_alert(alert_message)
-                            alerts_sent += 1
-                except:
-                    continue
+def main():
+    alerts_sent = 0
+    max_alerts_per_day = 4
 
-if name == "main": while True: all_odds = [] all_odds += get_onexbet_live_odds() all_odds += get_onexbet_prematch_odds()
+    while True:
+        try:
+            all_data = []
 
-all_odds += get_stake_live_odds()
-    all_odds += get_stake_prematch_odds()
+            all_data.extend(get_onexbet_live_odds())
+            all_data.extend(get_onexbet_prematch_odds())
 
-    all_odds += get_bcgame_live_odds()
-    all_odds += get_bcgame_prematch_odds()
+            all_data.extend(get_stake_live_odds())
+            all_data.extend(get_stake_prematch_odds())
 
-    all_odds += get_mostbet_live_odds()
-    all_odds += get_mostbet_prematch_odds()
+            all_data.extend(get_bcgame_live_odds())
+            all_data.extend(get_bcgame_prematch_odds())
 
-    find_arbitrage_opportunities(all_odds)
-    time.sleep(300)  # Check every 5 minutes
+            all_data.extend(get_mostbet_live_odds())
+            all_data.extend(get_mostbet_prematch_odds())
 
+            opportunities = find_arbitrage_opportunities(all_data)
+
+            for arb in opportunities:
+                if alerts_sent >= max_alerts_per_day:
+                    break
+                if arb["profit_percent"] >= 10:
+                    send_telegram_alert(arb)
+                    alerts_sent += 1
+
+        except Exception as e:
+            print("Error in main loop:", e)
+
+        time.sleep(300)  # wait for 5 minutes
+
+if __name__ == "__main__":
+    main()

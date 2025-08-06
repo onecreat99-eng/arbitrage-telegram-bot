@@ -1,28 +1,27 @@
 import os
-import time
 import requests
 from datetime import datetime
 from bcgame_scraper import get_bcgame_live_odds, get_bcgame_prematch_odds
 from mostbet_scraper import get_mostbet_live_odds, get_mostbet_prematch_odds
 
-# Get Bot Token and Chat ID from environment variables
+# Load Telegram credentials
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 def send_telegram_alert(message):
-    """Send message to Telegram."""
+    """Send a message to Telegram."""
     if not BOT_TOKEN or not CHAT_ID:
         print("[Telegram] Missing BOT_TOKEN or CHAT_ID")
         return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
     try:
-        requests.post(url, data=payload)
+        requests.post(url, data=payload, timeout=10)
     except Exception as e:
         print(f"[Telegram] Error: {e}")
 
 def calculate_profit(odds_a, odds_b):
-    """Calculate arbitrage profit percentage."""
+    """Calculate arbitrage profit %."""
     try:
         inv_a = 1 / float(odds_a)
         inv_b = 1 / float(odds_b)
@@ -31,9 +30,8 @@ def calculate_profit(odds_a, odds_b):
         return -100
 
 def run_bot():
-    """Main arbitrage detection loop."""
+    """Fetch data and find arbitrage opportunities."""
     try:
-        # Get all odds data
         data = (
             get_bcgame_live_odds() +
             get_bcgame_prematch_odds() +
@@ -67,7 +65,6 @@ def run_bot():
         print(f"[Bot Error] {e}")
 
 if __name__ == "__main__":
-    print("Bot started. Checking every 5 minutes...")
-    while True:
-        run_bot()
-        time.sleep(300)
+    print("Bot started - running once for GitHub Actions...")
+    run_bot()
+    print("Bot finished.")

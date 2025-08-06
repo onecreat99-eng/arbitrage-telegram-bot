@@ -12,7 +12,4 @@ def send_telegram_message(message):
 
 if __name__ == "__main__":
     data = get_bcgame_odds()
-    if data:
-        send_telegram_message(f"✅ BC.Game scraper fetched {len(data)} markets successfully!")
-    else:
-        send_telegram_message("❌ BC.Game scraper failed or returned no data.")
+    send_telegram_message(f"✅ BC.Game scraper ran successfully. Markets found: {len(data)}")

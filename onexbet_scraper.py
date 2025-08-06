@@ -1,33 +1,29 @@
 import requests
 
-def get_onexbet_odds(live=True):
-    url = "https://1xbet.com/LiveFeed/Get1x2" if live else "https://1xbet.com/LiveFeed/Get1x2Prematch"
-    params = {"sportId": 1, "lng": "en"}
-    
+def get_1xbet_odds(live=True):
+    # यह सिर्फ example API है, असली scraping logic यहाँ डालना होगा
+    url = "https://1xbet-data.example/api/live" if live else "https://1xbet-data.example/api/prematch"
     try:
-        res = requests.get(url, params=params, timeout=10)
+        res = requests.get(url, timeout=10)
         res.raise_for_status()
         data = res.json()
-        
+
         results = []
-        for match in data.get("Value", []):
+        for match in data.get("matches", []):
             results.append({
-                "match": match.get("O1", "") + " vs " + match.get("O2", ""),
-                "market": "Match Winner",
+                "match": match.get("name", "Unknown Match"),
+                "market": match.get("market", "Unknown Market"),
                 "bookmaker": "1xBet",
-                "odds": {
-                    match.get("O1", ""): match.get("P1", 0),
-                    match.get("O2", ""): match.get("P2", 0)
-                },
+                "odds": match.get("odds", {}),
                 "is_live": live
             })
         return results
     except Exception as e:
-        print(f"[1XBET {'LIVE' if live else 'PREMATCH'}] Error:", e)
+        print(f"[1xBet {'LIVE' if live else 'PREMATCH'}] Error:", e)
         return []
 
-def get_onexbet_live_odds():
-    return get_onexbet_odds(live=True)
+def get_1xbet_live_odds():
+    return get_1xbet_odds(live=True)
 
-def get_onexbet_prematch_odds():
-    return get_onexbet_odds(live=False)
+def get_1xbet_prematch_odds():
+    return get_1xbet_odds(live=False)

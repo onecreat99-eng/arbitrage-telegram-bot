@@ -1,13 +1,12 @@
 services:
   - type: web
-    name: arbitrage-bot
+    name: arbitrage-2-bk-bot
     env: python
     plan: free
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python main.py"
-    schedule: "*/5 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
     envVars:
-      - key: BOT_TOKEN
+      - key: TELEGRAM_BOT_TOKEN
         sync: false
-      - key: CHAT_ID
+      - key: TELEGRAM_CHAT_ID
         sync: false

@@ -1,13 +1,16 @@
-# vbet_scraper.py
-
 import requests
 
 def get_vbet_matches(live=True):
     url = "https://www.vbet.com/sportsbook/api/events/"
     url += "live" if live else "prematch"
 
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Accept": "application/json"
+    }
+
     try:
-        res = requests.get(url, timeout=10)
+        res = requests.get(url, headers=headers, timeout=10)
         res.raise_for_status()
         data = res.json()
 

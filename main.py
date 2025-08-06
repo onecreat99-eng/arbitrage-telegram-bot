@@ -1,68 +1,65 @@
 import os
 import requests
 from datetime import datetime
-from onexbet import get_onexbet_odds
-from stake import get_stake_odds
-from bcgame import get_bcgame_odds
+from onexbet import get_1xbet_live_odds, get_1xbet_prematch_odds
+from stake import get_stake_live_odds, get_stake_prematch_odds
+from bcgame import get_bcgame_live_odds, get_bcgame_prematch_odds
 
-# Telegram settings
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Min profit %
-MIN_PROFIT = 10.0
 MAX_ALERTS_PER_DAY = 8
 alerts_sent_today = 0
+today_date = datetime.now().date()
 
-def send_telegram_message(text):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
+def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
     try:
-        requests.post(url, data=payload, timeout=10)
+        requests.post(url, json=payload)
     except Exception as e:
-        print(f"[Telegram ERROR] {e}")
+        print(f"Telegram Error: {e}")
 
-def calc_arbitrage(odds1, odds2):
-    try:
-        inv_sum = (1/odds1[0]) + (1/odds2[2])
-        profit = (1 - inv_sum) * 100
-        return profit
-    except:
-        return -100
+def check_arbitrage():
+    global alerts_sent_today, today_date
 
-def main():
-    global alerts_sent_today
+    if datetime.now().date() != today_date:
+        alerts_sent_today = 0
+        today_date = datetime.now().date()
 
-    # Collect data
-    all_odds = []
-    all_odds.extend(get_onexbet_odds())
-    all_odds.extend(get_stake_odds())
-    all_odds.extend(get_bcgame_odds())
+    if alerts_sent_today >= MAX_ALERTS_PER_DAY:
+        print("Max alerts reached for today.")
+        return
 
-    print(f"Total odds collected: {len(all_odds)}")
+    bookmakers_data = {
+        "⚫ 1xBet": get_1xbet_live_odds() + get_1xbet_prematch_odds(),
+        "⚫ Stake": get_stake_live_odds() + get_stake_prematch_odds(),
+        "⚫ BC.Game": get_bcgame_live_odds() + get_bcgame_prematch_odds()
+    }
 
-    # Arbitrage detection
-    for i in range(len(all_odds)):
-        for j in range(i + 1, len(all_odds)):
-            if alerts_sent_today >= MAX_ALERTS_PER_DAY:
-                return
+    for match in bookmakers_data["⚫ 1xBet"]:
+        match_name = match["match"]
+        market = match["market"]
+        odds_1xbet = match["odds"]
 
-            game1 = all_odds[i]
-            game2 = all_odds[j]
+        for book, matches in bookmakers_data.items():
+            for m in matches:
+                if m["match"] == match_name and m["market"] == market:
+                    highest_odds = max(odds_1xbet, m["odds"])
+                    profit_percent = (highest_odds / odds_1xbet - 1) * 100
 
-            if game1["match"] == game2["match"] and game1["type"] == game2["type"]:
-                profit = calc_arbitrage(game1["odds"], game2["odds"])
-                if profit >= MIN_PROFIT:
-                    msg = (
-                        f"{'🟢' if game1['type']=='Live' else '🔵'} <b>{game1['match']}</b>\n"
-                        f"📊 Market: {game1['market']}\n"
-                        f"⚫ {game1['bookmaker']}: {game1['odds']}\n"
-                        f"⚫ {game2['bookmaker']}: {game2['odds']}\n"
-                        f"💰 Profit: <b>{profit:.2f}%</b>\n"
-                        f"🕒 {datetime.now().strftime('%H:%M:%S %d-%m-%Y')}"
-                    )
-                    send_telegram_message(msg)
-                    alerts_sent_today += 1
+                    if profit_percent >= 10 and alerts_sent_today < MAX_ALERTS_PER_DAY:
+                        message = (
+                            f"{'🟢' if 'Live' in market else '🔵'} <b>{match_name}</b>\n"
+                            f"📊 Market: {market}\n"
+                            f"{book} Odds: {m['odds']}\n"
+                            f"⚫ 1xBet Odds: {odds_1xbet}\n"
+                            f"💰 Profit: {profit_percent:.2f}%\n"
+                            f"⏰ {datetime.now().strftime('%H:%M:%S %d-%m-%Y')}"
+                        )
+                        send_telegram_message(message)
+                        alerts_sent_today += 1
 
 if __name__ == "__main__":
-    main()
+    print("Bot started")
+    check_arbitrage()

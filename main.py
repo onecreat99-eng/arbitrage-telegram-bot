@@ -1,34 +1,36 @@
 # Trigger auto-deploy on Render
-import os
-import requests
-import pytz
-from datetime import datetime
-from dotenv import load_dotenv
-from apscheduler.schedulers.blocking import BlockingScheduler
-from telegram import Bot
+for arb in arbitrage_data:
+    team1 = arb.get("team1", "Team A")
+    team2 = arb.get("team2", "Team B")
+    match_name = f"{team1} vs {team2}"  # ✅ Now dynamic!
 
-load_dotenv()
+    market = arb["market"]
+    bookmaker_1 = arb["bookmaker_1"]
+    bookmaker_2 = arb["bookmaker_2"]
+    odds_1 = arb["odds_1"]
+    odds_2 = arb["odds_2"]
+    match_type = arb["match_type"]
+    profit = arb["profit"]
 
-TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+    # Emoji logic
+    emoji = "🟢" if match_type.lower() == "live" else "🔵"
+    type_emoji = "🟡"
 
-bot = Bot(token=TOKEN)
-
-def send_alert():
+    # Time formatting
     now = datetime.now(pytz.timezone("Asia/Kolkata"))
-    current_time = now.strftime("%H:%M:%S %d-%m-%Y")
-    
+    time_str = now.strftime("%H:%M:%S | %d-%m-%Y")
+
+    # Telegram message
     message = f"""
-🟢 *Live Arbitrage Alert*
-⚫ *1xBet* 🆚 ⚫ *Mostbet*
+{emoji} *{match_type} Arbitrage Alert!*
 
-💹 *Market:* Full Time Result
-📊 *Profit:* 12.5%
-⏰ *Time:* {current_time}
+*Match:* {match_name}
+*Market:* {market}
+*Odds:* ⚫ {bookmaker_1} @ {odds_1} vs ⚫ {bookmaker_2} @ {odds_2}
+*Profit:* {profit:.2f}%
+*Type:* {type_emoji} Cross Bookmaker
+*Time:* {time_str}
 """
-    bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="Markdown")
 
-scheduler = BlockingScheduler()
-scheduler.add_job(send_alert, 'interval', minutes=5)
-send_alert()  # Run once at start
-scheduler.start()
+    # Send to Telegram
+    send_telegram_message(message.strip())

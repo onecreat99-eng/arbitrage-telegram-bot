@@ -1,5 +1,7 @@
 # Trigger auto-deploy on Render
 import os
+os.system("pip install python-dotenv")
+import os
 import time
 import requests
 from datetime import datetime

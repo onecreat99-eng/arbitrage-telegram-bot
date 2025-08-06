@@ -1,16 +1,13 @@
 services:
   - type: web
-    name: arbitrage-telegram-bot
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
-    envVars:
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: TELEGRAM_CHAT_ID
-        sync: false
-    autoDeploy: true
+    name: arbitrage-bot
+    env: python
     plan: free
-    schedule:
-      type: cron
-      cron: "*/5 * * * *"  # Run every 5 minutes
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python main.py"
+    schedule: "*/5 * * * *"
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: CHAT_ID
+        sync: false

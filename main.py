@@ -1,65 +1,103 @@
 import os
+import time
 import requests
 from datetime import datetime
-from onexbet import get_1xbet_live_odds, get_1xbet_prematch_odds
-from stake import get_stake_live_odds, get_stake_prematch_odds
-from bcgame import get_bcgame_live_odds, get_bcgame_prematch_odds
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+# ============ TELEGRAM CONFIG ============
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+# ============ SETTINGS ============
 MAX_ALERTS_PER_DAY = 8
+PROFIT_THRESHOLD = 10  # %
 alerts_sent_today = 0
 today_date = datetime.now().date()
 
-def send_telegram_message(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
-    try:
-        requests.post(url, json=payload)
-    except Exception as e:
-        print(f"Telegram Error: {e}")
+# ============ SCRAPER PLACEHOLDERS ============
 
-def check_arbitrage():
+def get_1xbet_live_odds():
+    return []  # TODO: Add real scraping code
+
+def get_1xbet_prematch_odds():
+    return []  # TODO: Add real scraping code
+
+def get_stake_live_odds():
+    return []  # TODO: Add real scraping code
+
+def get_stake_prematch_odds():
+    return []  # TODO: Add real scraping code
+
+def get_bcgame_live_odds():
+    return []  # TODO: Add real scraping code
+
+def get_bcgame_prematch_odds():
+    return []  # TODO: Add real scraping code
+
+# ============ TELEGRAM ALERT ============
+
+def send_telegram_alert(message):
+    if not BOT_TOKEN or not CHAT_ID:
+        print("[Telegram] Missing BOT_TOKEN or CHAT_ID")
+        return
+    try:
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                      data={"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"})
+    except Exception as e:
+        print(f"[Telegram] Error: {e}")
+
+# ============ ARBITRAGE CHECK ============
+def calculate_profit(odds_a, odds_b):
+    try:
+        inv_a = 1 / float(odds_a)
+        inv_b = 1 / float(odds_b)
+        return round((1 - (inv_a + inv_b)) * 100, 2)
+    except:
+        return -100
+
+def run_bot():
     global alerts_sent_today, today_date
 
+    # Reset daily alert count
     if datetime.now().date() != today_date:
         alerts_sent_today = 0
         today_date = datetime.now().date()
 
     if alerts_sent_today >= MAX_ALERTS_PER_DAY:
-        print("Max alerts reached for today.")
+        print("Max alerts sent today.")
         return
 
-    bookmakers_data = {
-        "⚫ 1xBet": get_1xbet_live_odds() + get_1xbet_prematch_odds(),
-        "⚫ Stake": get_stake_live_odds() + get_stake_prematch_odds(),
-        "⚫ BC.Game": get_bcgame_live_odds() + get_bcgame_prematch_odds()
-    }
+    # Get all odds (currently empty lists)
+    data = (
+        get_1xbet_live_odds() + get_1xbet_prematch_odds() +
+        get_stake_live_odds() + get_stake_prematch_odds() +
+        get_bcgame_live_odds() + get_bcgame_prematch_odds()
+    )
 
-    for match in bookmakers_data["⚫ 1xBet"]:
-        match_name = match["match"]
-        market = match["market"]
-        odds_1xbet = match["odds"]
+    # Compare for arbitrage
+    for i, match_a in enumerate(data):
+        for match_b in data[i + 1:]:
+            if match_a["match"] == match_b["match"] and match_a["market"] == match_b["market"]:
+                for team in match_a["odds"]:
+                    if team in match_b["odds"]:
+                        profit = calculate_profit(match_a["odds"][team], match_b["odds"][team])
+                        if profit >= PROFIT_THRESHOLD:
+                            match_type = "🟢 Live" if match_a["is_live"] else "🔵 Prematch"
+                            time_now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+                            message = (
+                                f"{match_type} Arbitrage Found!\n"
+                                f"{match_a['bookmaker']}: {match_a['odds'][team]}\n"
+                                f"{match_b['bookmaker']}: {match_b['odds'][team]}\n"
+                                f"💰 Profit: {profit}%\n"
+                                f"🕒 {time_now}"
+                            )
+                            send_telegram_alert(message)
+                            alerts_sent_today += 1
+                            if alerts_sent_today >= MAX_ALERTS_PER_DAY:
+                                return
 
-        for book, matches in bookmakers_data.items():
-            for m in matches:
-                if m["match"] == match_name and m["market"] == market:
-                    highest_odds = max(odds_1xbet, m["odds"])
-                    profit_percent = (highest_odds / odds_1xbet - 1) * 100
-
-                    if profit_percent >= 10 and alerts_sent_today < MAX_ALERTS_PER_DAY:
-                        message = (
-                            f"{'🟢' if 'Live' in market else '🔵'} <b>{match_name}</b>\n"
-                            f"📊 Market: {market}\n"
-                            f"{book} Odds: {m['odds']}\n"
-                            f"⚫ 1xBet Odds: {odds_1xbet}\n"
-                            f"💰 Profit: {profit_percent:.2f}%\n"
-                            f"⏰ {datetime.now().strftime('%H:%M:%S %d-%m-%Y')}"
-                        )
-                        send_telegram_message(message)
-                        alerts_sent_today += 1
-
+# ============ MAIN LOOP ============
 if __name__ == "__main__":
-    print("Bot started")
-    check_arbitrage()
+    print("Bot started. Running every 5 minutes...")
+    while True:
+        run_bot()
+        time.sleep(300)

@@ -1,30 +1,42 @@
 import requests
 
-BASE_URL = "https://bcgame-data.example/api"  # यहां असली API/endpoint डालना होगा
+def get_bcgame_odds():
+    results = []
 
-def get_bcgame_odds(live=True):
-    url = f"{BASE_URL}/live" if live else f"{BASE_URL}/prematch"
     try:
-        res = requests.get(url, timeout=10)
-        res.raise_for_status()
-        data = res.json()
-
-        results = []
-        for match in data.get("matches", []):
+        # Live odds
+        live_url = "https://bc.game/api/sports/live"
+        live_data = requests.get(live_url, timeout=10).json()
+        for match in live_data.get("data", []):
             results.append({
-                "match": match.get("name", "Unknown Match"),
-                "market": match.get("market", "Unknown Market"),
-                "bookmaker": "⚫ BC.Game",
-                "odds": match.get("odds", {}),
-                "is_live": live
+                "bookmaker": "BC.Game",
+                "type": "Live",
+                "match": match.get("home") + " vs " + match.get("away"),
+                "market": "Fulltime Result",
+                "odds": [
+                    match["markets"][0]["selections"][0]["odds"],
+                    match["markets"][0]["selections"][1]["odds"],
+                    match["markets"][0]["selections"][2]["odds"]
+                ]
             })
-        return results
+
+        # Prematch odds
+        pre_url = "https://bc.game/api/sports/upcoming"
+        pre_data = requests.get(pre_url, timeout=10).json()
+        for match in pre_data.get("data", []):
+            results.append({
+                "bookmaker": "BC.Game",
+                "type": "Prematch",
+                "match": match.get("home") + " vs " + match.get("away"),
+                "market": "Fulltime Result",
+                "odds": [
+                    match["markets"][0]["selections"][0]["odds"],
+                    match["markets"][0]["selections"][1]["odds"],
+                    match["markets"][0]["selections"][2]["odds"]
+                ]
+            })
+
     except Exception as e:
-        print(f"[BC.Game {'LIVE' if live else 'PREMATCH'}] Error:", e)
-        return []
+        print(f"[BC.Game ERROR] {e}")
 
-def get_bcgame_live_odds():
-    return get_bcgame_odds(live=True)
-
-def get_bcgame_prematch_odds():
-    return get_bcgame_odds(live=False)
+    return results

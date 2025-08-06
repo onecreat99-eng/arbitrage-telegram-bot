@@ -1,53 +1,44 @@
 import requests
-from datetime import datetime
 
-def fetch_vbet_matches(live=True):
-    base_url = "https://www.vbet.com"
-    endpoint = "/sportsbook/api/events/live" if live else "/sportsbook/api/events/prematch"
-    
+def get_vbet_matches(live=True):
+    url = "https://www.vbet.com/sportsbook/api/events/"
+    url += "live" if live else "prematch"
+
     try:
-        response = requests.get(base_url + endpoint, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        
-        matches = []
+        res = requests.get(url, timeout=10)
+        res.raise_for_status()
+        data = res.json()
+
+        results = []
         for match in data.get("events", []):
             match_name = match.get("name", "Unknown Match")
             markets = match.get("markets", [])
             odds_data = []
-            
+
             for market in markets:
                 market_name = market.get("name", "")
                 for outcome in market.get("selections", []):
-                    outcome_name = outcome.get("name", "")
-                    price = outcome.get("price", 0)
                     odds_data.append({
                         "market": market_name,
-                        "outcome": outcome_name,
-                        "odds": price
+                        "outcome": outcome.get("name", ""),
+                        "odds": outcome.get("price", 0)
                     })
 
-            matches.append({
+            results.append({
+                "bookmaker": "VBet",
                 "match": match_name,
-                "time": match.get("startTime", ""),
+                "match_type": "Live" if live else "Prematch",
                 "odds": odds_data
             })
-        
-        return matches
+
+        return results
 
     except Exception as e:
-        print(f"VBet {'Live' if live else 'Prematch'} Scraper Error:", e)
+        print(f"[VBET {'LIVE' if live else 'PREMATCH'}] Error:", e)
         return []
 
-# Example usage:
-if __name__ == "__main__":
-    live_matches = fetch_vbet_matches(live=True)
-    prematch_matches = fetch_vbet_matches(live=False)
+def get_vbet_live_odds():
+    return get_vbet_matches(live=True)
 
-    print("📺 LIVE MATCHES:")
-    for m in live_matches[:2]:
-        print(m['match'], [o['odds'] for o in m['odds'][:3]])
-
-    print("\n⏳ PREMATCH MATCHES:")
-    for m in prematch_matches[:2]:
-        print(m['match'], [o['odds'] for o in m['odds'][:3]])
+def get_vbet_prematch_odds():
+    return get_vbet_matches(live=False)

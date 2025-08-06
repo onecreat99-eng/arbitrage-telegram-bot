@@ -1,9 +1,12 @@
 services:
   - type: web
-    name: arbitrage-bot
-    runtime: python
+    name: arbitrage-telegram-bot
+    env: python
+    plan: free
     buildCommand: ""
     startCommand: python main.py
-    plan: free
-    autoDeploy: true
-    schedule: "*/5 * * * *"
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: CHAT_ID
+        sync: false

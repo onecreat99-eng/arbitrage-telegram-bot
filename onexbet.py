@@ -1,34 +1,45 @@
 import requests
 
-def get_onexbet_odds(live=True):
-    url = "https://1xbet.com/api/v1/live" if live else "https://1xbet.com/api/v1/line"
-    try:
-        res = requests.get(url, timeout=10)
-        res.raise_for_status()
-        data = res.json()
+BASE_URL = "https://1xbet.com/LineFeed/Get1x2_VZip"
 
-        results = []
-        for event in data.get("events", []):
-            match_name = event.get("name", "Unknown Match")
-            for market in event.get("markets", []):
-                odds_dict = {}
-                for outcome in market.get("outcomes", []):
-                    odds_dict[outcome.get("name", "Unknown")] = float(outcome.get("odds", 0))
-                if odds_dict:
-                    results.append({
-                        "match": match_name,
-                        "market": market.get("name", "Unknown Market"),
-                        "bookmaker": "⚫ 1xBet",
-                        "odds": odds_dict,
-                        "is_live": live
-                    })
-        return results
+def get_1xbet_live_odds():
+    """
+    1xBet से live odds fetch करता है।
+    """
+    params = {
+        "sports": 0,        # All sports
+        "count": 50,        # कितने matches चाहिए
+        "lng": "en",
+        "mode": 4,          # Live mode
+        "country": 1,
+        "partner": 51
+    }
+    try:
+        res = requests.get(BASE_URL, params=params, timeout=10)
+        data = res.json()
+        matches = data.get("Value", [])
+        return matches
     except Exception as e:
-        print(f"[1xBet {'LIVE' if live else 'PREMATCH'}] Error:", e)
+        print(f"1xBet Live Odds Error: {e}")
         return []
 
-def get_onexbet_live_odds():
-    return get_onexbet_odds(live=True)
-
-def get_onexbet_prematch_odds():
-    return get_onexbet_odds(live=False)
+def get_1xbet_prematch_odds():
+    """
+    1xBet से prematch odds fetch करता है।
+    """
+    params = {
+        "sports": 0,
+        "count": 50,
+        "lng": "en",
+        "mode": 1,         # Prematch mode
+        "country": 1,
+        "partner": 51
+    }
+    try:
+        res = requests.get(BASE_URL, params=params, timeout=10)
+        data = res.json()
+        matches = data.get("Value", [])
+        return matches
+    except Exception as e:
+        print(f"1xBet Prematch Odds Error: {e}")
+        return []

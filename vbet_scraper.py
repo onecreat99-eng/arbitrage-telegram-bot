@@ -1,49 +1,33 @@
 import requests
+from bs4 import BeautifulSoup
 
-def get_vbet_matches(live=True):
-    url = "https://www.vbet.com/sportsbook/api/events/"
-    url += "live" if live else "prematch"
-
+def get_vbet_matches():
+    url = "https://www.vbet.com/en/sports"
+    
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "Accept": "application/json"
+        "Accept-Language": "en-US,en;q=0.9",
     }
 
     try:
-        res = requests.get(url, headers=headers, timeout=10)
-        res.raise_for_status()
-        data = res.json()
+        session = requests.Session()
+        response = session.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
 
-        results = []
-        for match in data.get("events", []):
-            match_name = match.get("name", "Unknown Match")
-            markets = match.get("markets", [])
-            odds_data = []
+        soup = BeautifulSoup(response.text, 'html.parser')
+        matches = []
 
-            for market in markets:
-                market_name = market.get("name", "")
-                for outcome in market.get("selections", []):
-                    odds_data.append({
-                        "market": market_name,
-                        "outcome": outcome.get("name", ""),
-                        "odds": outcome.get("price", 0)
-                    })
+        for event in soup.select(".sports-events-list-item"):
+            match_name = event.get_text(strip=True)
+            matches.append({"match": match_name})
 
-            results.append({
-                "bookmaker": "VBet",
-                "match": match_name,
-                "match_type": "Live" if live else "Prematch",
-                "odds": odds_data
-            })
-
-        return results
+        return matches
 
     except Exception as e:
-        print(f"[VBET {'LIVE' if live else 'PREMATCH'}] Error:", e)
+        print("VBet Scraper Error:", e)
         return []
 
-def get_vbet_live_odds():
-    return get_vbet_matches(live=True)
-
-def get_vbet_prematch_odds():
-    return get_vbet_matches(live=False)
+if __name__ == "__main__":
+    data = get_vbet_matches()
+    for match in data[:5]:
+        print("🎯 Match:", match["match"])

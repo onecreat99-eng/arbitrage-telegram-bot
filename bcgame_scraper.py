@@ -1,21 +1,25 @@
 import requests
 
 def get_bcgame_odds(live=True):
-    url = "https://bcgame-data.example/api/live" if live else "https://bcgame-data.example/api/prematch"
+    url = "https://sports-api.bcgame.bio/api/v1/public/sports"
     try:
         res = requests.get(url, timeout=10)
         res.raise_for_status()
         data = res.json()
 
         results = []
-        for match in data.get("matches", []):
-            results.append({
-                "match": match.get("name", "Unknown Match"),
-                "market": match.get("market", "Unknown Market"),
-                "bookmaker": "BC.Game",
-                "odds": match.get("odds", {}),
-                "is_live": live,
-            })
+        for sport in data.get("data", []):
+            for match in sport.get("matches", []):
+                results.append({
+                    "match": match.get("homeTeam", "") + " vs " + match.get("awayTeam", ""),
+                    "market": "Match Winner",
+                    "bookmaker": "⚫ BC.Game",
+                    "odds": {
+                        match.get("homeTeam", ""): match.get("markets", [{}])[0].get("outcomes", [{}])[0].get("odds", 0),
+                        match.get("awayTeam", ""): match.get("markets", [{}])[0].get("outcomes", [{}])[1].get("odds", 0)
+                    },
+                    "is_live": live
+                })
         return results
     except Exception as e:
         print(f"[BC.Game {'LIVE' if live else 'PREMATCH'}] Error:", e)

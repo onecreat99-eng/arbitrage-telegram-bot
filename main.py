@@ -1,82 +1,99 @@
 # Trigger auto-deploy on Render
-import time
+import os
+from datetime import datetime
+from dotenv import load_dotenv
+import requests
+
+# Scrapers
 from onexbet_scraper import get_onexbet_live_odds, get_onexbet_prematch_odds
-from stake_scraper import get_stake_live_odds, get_stake_prematch_odds
 from bcgame_scraper import get_bcgame_live_odds, get_bcgame_prematch_odds
-from mostbet_scraper import get_mostbet_live_odds, get_mostbet_prematch_odds
-from telegram_alert import send_telegram_alert
 
-def find_arbitrage_opportunities(bookmaker_data):
+load_dotenv()
+
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+MAX_ALERTS_PER_DAY = 8
+PROFIT_THRESHOLD = 10.0
+
+sent_alerts = []
+
+def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+    try:
+        requests.post(url, json=payload)
+    except Exception as e:
+        print("Telegram Error:", e)
+
+def is_duplicate(alert):
+    for a in sent_alerts:
+        if a['match'] == alert['match'] and a['market'] == alert['market']:
+            return True
+    return False
+
+def check_arbitrage(odds_data):
     opportunities = []
-
-    for i in range(len(bookmaker_data)):
-        for j in range(i + 1, len(bookmaker_data)):
-            data1 = bookmaker_data[i]
-            data2 = bookmaker_data[j]
-
-            if data1["match"].lower() == data2["match"].lower():
-                for odd1 in data1["odds"]:
-                    for odd2 in data2["odds"]:
-                        if (
-                            odd1["market"].lower() == odd2["market"].lower()
-                            and odd1["outcome"].lower() != odd2["outcome"].lower()
-                        ):
-                            try:
-                                o1 = float(odd1["odds"])
-                                o2 = float(odd2["odds"])
-
-                                profit_percent = (1 / o1 + 1 / o2)
-                                if profit_percent < 1:
-                                    profit = round((1 - profit_percent) * 100, 2)
-                                    opportunities.append({
-                                        "match": data1["match"],
-                                        "market": odd1["market"],
-                                        "outcome_1": odd1["outcome"],
-                                        "odds_1": o1,
-                                        "bookmaker_1": data1["bookmaker"],
-                                        "outcome_2": odd2["outcome"],
-                                        "odds_2": o2,
-                                        "bookmaker_2": data2["bookmaker"],
-                                        "match_type": data1["match_type"],
-                                        "profit_percent": profit
-                                    })
-                            except:
-                                continue
+    for i in range(len(odds_data)):
+        for j in range(i+1, len(odds_data)):
+            a = odds_data[i]
+            b = odds_data[j]
+            if a['match'] == b['match'] and a['market'] == b['market'] and a['bookmaker'] != b['bookmaker']:
+                try:
+                    odds_a = list(a['odds'].values())
+                    odds_b = list(b['odds'].values())
+                    if len(odds_a) >= 1 and len(odds_b) >= 1:
+                        inv1 = 1 / float(odds_a[0])
+                        inv2 = 1 / float(odds_b[1]) if len(odds_b) > 1 else 1 / float(odds_b[0])
+                        total = inv1 + inv2
+                        if total < 1:
+                            profit = round((1 - total) * 100, 2)
+                            if profit >= PROFIT_THRESHOLD:
+                                opportunities.append({
+                                    "match": a['match'],
+                                    "market": a['market'],
+                                    "bookmakers": f"⚫ {a['bookmaker']} | ⚫ {b['bookmaker']}",
+                                    "odds": f"{odds_a[0]} | {odds_b[1] if len(odds_b) > 1 else odds_b[0]}",
+                                    "profit": profit,
+                                    "is_live": a['is_live'] or b['is_live']
+                                })
+                except:
+                    continue
     return opportunities
 
+def format_alert(data):
+    match_type = "🟢 Live" if data['is_live'] else "🔵 Prematch"
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return f"""{match_type} Arbitrage Found!
+🏟️ Match: {data['match']}
+🎯 Market: {data['market']}
+📊 Odds: {data['odds']}
+💰 Profit: {data['profit']}%
+📚 Bookmakers: {data['bookmakers']}
+🕒 Time: {now}"""
+
 def main():
+    global sent_alerts
+    sent_alerts = []
+
+    all_odds = []
+    all_odds += get_onexbet_live_odds()
+    all_odds += get_onexbet_prematch_odds()
+    all_odds += get_bcgame_live_odds()
+    all_odds += get_bcgame_prematch_odds()
+
+    arbitrage_opportunities = check_arbitrage(all_odds)
+
     alerts_sent = 0
-    max_alerts_per_day = 4
-
-    while True:
-        try:
-            all_data = []
-
-            all_data.extend(get_onexbet_live_odds())
-            all_data.extend(get_onexbet_prematch_odds())
-
-            all_data.extend(get_stake_live_odds())
-            all_data.extend(get_stake_prematch_odds())
-
-            all_data.extend(get_bcgame_live_odds())
-            all_data.extend(get_bcgame_prematch_odds())
-
-            all_data.extend(get_mostbet_live_odds())
-            all_data.extend(get_mostbet_prematch_odds())
-
-            opportunities = find_arbitrage_opportunities(all_data)
-
-            for arb in opportunities:
-                if alerts_sent >= max_alerts_per_day:
-                    break
-                if arb["profit_percent"] >= 10:
-                    send_telegram_alert(arb)
-                    alerts_sent += 1
-
-        except Exception as e:
-            print("Error in main loop:", e)
-
-        time.sleep(300)  # wait for 5 minutes
+    for opportunity in arbitrage_opportunities:
+        if alerts_sent >= MAX_ALERTS_PER_DAY:
+            break
+        if not is_duplicate(opportunity):
+            message = format_alert(opportunity)
+            send_telegram_message(message)
+            sent_alerts.append(opportunity)
+            alerts_sent += 1
+            print(f"Alert Sent: {message}")
 
 if __name__ == "__main__":
     main()

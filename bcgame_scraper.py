@@ -1,54 +1,44 @@
 import requests
 
-def fetch_bcgame_data(endpoint, live):
+BASE_URL = "https://sports.bcgame.com/api/v1/betline/events"
+
+def get_bcgame_odds():
+    """
+    Scrapes BC.Game odds for all sports, all markets, live & prematch
+    Returns: list of dict with match, market, bookmaker, odds, is_live
+    """
+    results = []
+
     try:
-        res = requests.get(endpoint, timeout=10, headers={
-            "User-Agent": "Mozilla/5.0"
-        })
-        res.raise_for_status()
-        data = res.json()
+        # Fetch data for both LIVE and PREMATCH
+        for status in ["LIVE", "PREMATCH"]:
+            params = {
+                "limit": 50,       # number of events
+                "status": status   # LIVE or PREMATCH
+            }
+            response = requests.get(BASE_URL, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
 
-        results = []
-        for match in data.get("data", []):
-            teams = match.get("teams", [])
-            if len(teams) < 2:
-                continue
+            for event in data.get("data", []):
+                match_name = f"{event['home']['name']} vs {event['away']['name']}"
+                is_live = (status == "LIVE")
 
-            for market in match.get("markets", []):
-                market_name = market.get("name") or market.get("key")
-                odds_dict = {}
+                for market in event.get("markets", []):
+                    market_name = market.get("key", "Unknown Market")
+                    odds_data = {}
+                    for outcome in market.get("outcomes", []):
+                        odds_data[outcome["name"]] = outcome["odds"]
 
-                for outcome in market.get("outcomes", []):
-                    label = outcome.get("label")
-                    odds_value = outcome.get("odds")
-                    if label and odds_value:
-                        try:
-                            odds_dict[label] = float(odds_value)
-                        except:
-                            continue
-
-                if odds_dict:
                     results.append({
-                        "match": f"{teams[0]} vs {teams[1]}",
+                        "match": match_name,
                         "market": market_name,
                         "bookmaker": "⚫ BC.Game",
-                        "odds": odds_dict,
-                        "is_live": live
+                        "odds": odds_data,
+                        "is_live": is_live
                     })
 
-        return results
-
     except Exception as e:
-        print(f"[BC.Game {'LIVE' if live else 'PREMATCH'}] Error:", e)
-        return []
+        print(f"BC.Game scraping error: {e}")
 
-
-def get_bcgame_live_odds():
-    # Live sports ka endpoint
-    endpoint = "https://sports.bc.game/api/sports/live"
-    return fetch_bcgame_data(endpoint, live=True)
-
-def get_bcgame_prematch_odds():
-    # Prematch sports ka endpoint
-    endpoint = "https://sports.bc.game/api/sports/pre-match"
-    return fetch_bcgame_data(endpoint, live=False)
+    return results

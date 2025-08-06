@@ -1,35 +1,34 @@
 import requests
 
-STAKE_API = "https://api.stake.com/sports/all/matches"
-
-def fetch_stake_data():
+def get_stake_odds(live=True):
+    url = "https://api.stake.com/sports/live" if live else "https://api.stake.com/sports/upcoming"
     try:
-        res = requests.get(STAKE_API, timeout=10)
+        res = requests.get(url, timeout=10)
         res.raise_for_status()
         data = res.json()
+
         results = []
-
-        for match in data.get("matches", []):
-            match_name = match.get("home_team", "") + " vs " + match.get("away_team", "")
-            for market in match.get("markets", []):
-                odds = {}
+        for event in data.get("events", []):
+            match_name = event.get("name", "Unknown Match")
+            for market in event.get("markets", []):
+                odds_dict = {}
                 for outcome in market.get("outcomes", []):
-                    odds[outcome.get("name", "")] = outcome.get("price", None)
-
-                results.append({
-                    "match": match_name.strip(),
-                    "market": market.get("key", "Unknown Market"),
-                    "bookmaker": "⚫ Stake",
-                    "odds": odds,
-                    "is_live": match.get("live", False)
-                })
+                    odds_dict[outcome.get("label", "Unknown")] = float(outcome.get("price", 0))
+                if odds_dict:
+                    results.append({
+                        "match": match_name,
+                        "market": market.get("name", "Unknown Market"),
+                        "bookmaker": "⚫ Stake",
+                        "odds": odds_dict,
+                        "is_live": live
+                    })
         return results
     except Exception as e:
-        print("[Stake] Error:", e)
+        print(f"[Stake {'LIVE' if live else 'PREMATCH'}] Error:", e)
         return []
 
 def get_stake_live_odds():
-    return fetch_stake_data()
+    return get_stake_odds(live=True)
 
 def get_stake_prematch_odds():
-    return fetch_stake_data()
+    return get_stake_odds(live=False)

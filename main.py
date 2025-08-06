@@ -1,63 +1,79 @@
-# main.py
+import os
 import time
-import threading
-from flask import Flask
+import requests
+from datetime import datetime
+
 from onexbet import get_1xbet_live_odds, get_1xbet_prematch_odds
 from stake import get_stake_live_odds, get_stake_prematch_odds
 from bcgame import get_bcgame_live_odds, get_bcgame_prematch_odds
 
-# Telegram settings
-import os
-import requests
-from datetime import datetime
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
-
-app = Flask(__name__)
-
-def send_telegram_message(message):
+def send_telegram_alert(message):
+    if not BOT_TOKEN or not CHAT_ID:
+        print("[Telegram] Missing BOT_TOKEN or CHAT_ID")
+        return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML"
-    }
+    payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
     try:
         requests.post(url, data=payload)
     except Exception as e:
-        print(f"Telegram Error: {e}")
+        print(f"[Telegram] Error: {e}")
 
-def check_arbitrage():
-    print(f"[{datetime.now()}] Checking arbitrage...")
+def calculate_profit(odds_a, odds_b):
     try:
-        odds_data = []
-        odds_data.extend(get_1xbet_live_odds())
-        odds_data.extend(get_1xbet_prematch_odds())
-        odds_data.extend(get_stake_live_odds())
-        odds_data.extend(get_stake_prematch_odds())
-        odds_data.extend(get_bcgame_live_odds())
-        odds_data.extend(get_bcgame_prematch_odds())
+        inv_a = 1 / float(odds_a)
+        inv_b = 1 / float(odds_b)
+        return round((1 - (inv_a + inv_b)) * 100, 2)
+    except:
+        return -100
 
-        # यहां arbitrage detection logic डाल सकते हैं
-        if odds_data:
-            send_telegram_message(f"✅ Odds collected: {len(odds_data)}")
-        else:
-            send_telegram_message("⚠ No odds found.")
+def run_bot():
+    try:
+        data = (
+            get_1xbet_live_odds() + get_1xbet_prematch_odds() +
+            get_stake_live_odds() + get_stake_prematch_odds() +
+            get_bcgame_live_odds() + get_bcgame_prematch_odds()
+        )
 
+        if not data:
+            send_telegram_alert("⚠️ No odds found.")
+            return
+
+        alerts_sent = 0
+
+        for i, match_a in enumerate(data):
+            for match_b in data[i + 1:]:
+                if (
+                    match_a["match"] == match_b["match"] and
+                    match_a["market"] == match_b["market"] and
+                    match_a["bookmaker"] != match_b["bookmaker"]
+                ):
+                    for team in match_a["odds"]:
+                        if match_a["odds"][team] and team in match_b["odds"] and match_b["odds"][team]:
+                            profit = calculate_profit(match_a["odds"][team], match_b["odds"][team])
+                            if profit >= 10:
+                                match_type = "🟢 Live" if match_a["type"] == "Live" else "🔵 Prematch"
+                                time_now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+                                message = (
+                                    f"{match_type} Arbitrage Found\n"
+                                    f"{match_a['bookmaker']}: {match_a['odds'][team]}\n"
+                                    f"{match_b['bookmaker']}: {match_b['odds'][team]}\n"
+                                    f"💰 Profit: {profit}%\n"
+                                    f"🏟 Match: {match_a['match']}\n"
+                                    f"📊 Market: {match_a['market']}\n"
+                                    f"🕒 {time_now}"
+                                )
+                                send_telegram_alert(message)
+                                alerts_sent += 1
+                                if alerts_sent >= 8:
+                                    return
     except Exception as e:
-        print(f"Arbitrage Error: {e}")
-        send_telegram_message(f"❌ Error: {e}")
-
-def run_scheduler():
-    while True:
-        check_arbitrage()
-        time.sleep(300)  # हर 5 मिनट में run
-
-@app.route('/')
-def home():
-    return "Bot is running!"
+        print(f"[Bot Error] {e}")
 
 if __name__ == "__main__":
-    threading.Thread(target=run_scheduler, daemon=True).start()
-    app.run(host="0.0.0.0", port=10000)
+    print("Bot started. Checking every 5 minutes...")
+    while True:
+        run_bot()
+        time.sleep(300)

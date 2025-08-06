@@ -5,24 +5,24 @@ from datetime import datetime
 from bcgame_scraper import get_bcgame_live_odds, get_bcgame_prematch_odds
 from mostbet_scraper import get_mostbet_live_odds, get_mostbet_prematch_odds
 
-# Load Telegram credentials from environment
+# Get Bot Token and Chat ID from environment variables
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Send Telegram message
 def send_telegram_alert(message):
+    """Send message to Telegram."""
     if not BOT_TOKEN or not CHAT_ID:
         print("[Telegram] Missing BOT_TOKEN or CHAT_ID")
         return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
     try:
-        requests.post(url, data=payload, timeout=10)
+        requests.post(url, data=payload)
     except Exception as e:
         print(f"[Telegram] Error: {e}")
 
-# Calculate arbitrage profit
 def calculate_profit(odds_a, odds_b):
+    """Calculate arbitrage profit percentage."""
     try:
         inv_a = 1 / float(odds_a)
         inv_b = 1 / float(odds_b)
@@ -30,18 +30,21 @@ def calculate_profit(odds_a, odds_b):
     except:
         return -100
 
-# Main bot logic
 def run_bot():
+    """Main arbitrage detection loop."""
     try:
-        bookmakers_data = (
-            get_bcgame_live_odds() + get_bcgame_prematch_odds() +
-            get_mostbet_live_odds() + get_mostbet_prematch_odds()
+        # Get all odds data
+        data = (
+            get_bcgame_live_odds() +
+            get_bcgame_prematch_odds() +
+            get_mostbet_live_odds() +
+            get_mostbet_prematch_odds()
         )
 
         alerts_sent = 0
 
-        for i, match_a in enumerate(bookmakers_data):
-            for match_b in bookmakers_data[i + 1:]:
+        for i, match_a in enumerate(data):
+            for match_b in data[i + 1:]:
                 if match_a["match"] == match_b["match"] and match_a["market"] == match_b["market"]:
                     for team in match_a["odds"]:
                         if team in match_b["odds"]:
@@ -63,7 +66,6 @@ def run_bot():
     except Exception as e:
         print(f"[Bot Error] {e}")
 
-# Run every 5 minutes
 if __name__ == "__main__":
     print("Bot started. Checking every 5 minutes...")
     while True:

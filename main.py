@@ -1,55 +1,68 @@
 import os
 import requests
 from datetime import datetime
-from onexbet import get_1xbet_live_odds, get_1xbet_prematch_odds
-from stake import get_stake_live_odds, get_stake_prematch_odds
-from bcgame import get_bcgame_live_odds, get_bcgame_prematch_odds
+from onexbet import get_onexbet_odds
+from stake import get_stake_odds
+from bcgame import get_bcgame_odds
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+# Telegram settings
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
-def send_telegram_alert(message):
-    if not BOT_TOKEN or not CHAT_ID:
-        print("[Telegram] Missing BOT_TOKEN or CHAT_ID")
-        return
+# Min profit %
+MIN_PROFIT = 10.0
+MAX_ALERTS_PER_DAY = 8
+alerts_sent_today = 0
+
+def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
+    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
     try:
-        res = requests.post(url, data=payload)
-        print(f"[Telegram] Status: {res.status_code}, Response: {res.text}")
+        requests.post(url, data=payload, timeout=10)
     except Exception as e:
-        print(f"[Telegram] Error: {e}")
+        print(f"[Telegram ERROR] {e}")
 
-def run_bot():
+def calc_arbitrage(odds1, odds2):
     try:
-        data = (
-            get_1xbet_live_odds() + get_1xbet_prematch_odds() +
-            get_stake_live_odds() + get_stake_prematch_odds() +
-            get_bcgame_live_odds() + get_bcgame_prematch_odds()
-        )
+        inv_sum = (1/odds1[0]) + (1/odds2[2])
+        profit = (1 - inv_sum) * 100
+        return profit
+    except:
+        return -100
 
-        alerts_sent = 0
+def main():
+    global alerts_sent_today
 
-        for i, match_a in enumerate(data):
-            for match_b in data[i + 1:]:
-                if match_a["match"] == match_b["match"] and match_a["market"] == match_b["market"]:
-                    for team in match_a["odds"]:
-                        if team in match_b["odds"]:
-                            match_type = "🟢 Live" if match_a["is_live"] else "🔵 Prematch"
-                            time_now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-                            message = (
-                                f"{match_type} Arbitrage Found (TEST MODE)\n"
-                                f"{match_a['bookmaker']}: {match_a['odds'][team]}\n"
-                                f"{match_b['bookmaker']}: {match_b['odds'][team]}\n"
-                                f"🕒 {time_now}"
-                            )
-                            send_telegram_alert(message)
-                            alerts_sent += 1
-                            if alerts_sent >= 4:
-                                return
-    except Exception as e:
-        print(f"[Bot Error] {e}")
+    # Collect data
+    all_odds = []
+    all_odds.extend(get_onexbet_odds())
+    all_odds.extend(get_stake_odds())
+    all_odds.extend(get_bcgame_odds())
+
+    print(f"Total odds collected: {len(all_odds)}")
+
+    # Arbitrage detection
+    for i in range(len(all_odds)):
+        for j in range(i + 1, len(all_odds)):
+            if alerts_sent_today >= MAX_ALERTS_PER_DAY:
+                return
+
+            game1 = all_odds[i]
+            game2 = all_odds[j]
+
+            if game1["match"] == game2["match"] and game1["type"] == game2["type"]:
+                profit = calc_arbitrage(game1["odds"], game2["odds"])
+                if profit >= MIN_PROFIT:
+                    msg = (
+                        f"{'🟢' if game1['type']=='Live' else '🔵'} <b>{game1['match']}</b>\n"
+                        f"📊 Market: {game1['market']}\n"
+                        f"⚫ {game1['bookmaker']}: {game1['odds']}\n"
+                        f"⚫ {game2['bookmaker']}: {game2['odds']}\n"
+                        f"💰 Profit: <b>{profit:.2f}%</b>\n"
+                        f"🕒 {datetime.now().strftime('%H:%M:%S %d-%m-%Y')}"
+                    )
+                    send_telegram_message(msg)
+                    alerts_sent_today += 1
 
 if __name__ == "__main__":
-    print("Bot started - TEST MODE - single run")
-    run_bot()
+    main()

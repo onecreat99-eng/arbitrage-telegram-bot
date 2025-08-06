@@ -1,39 +1,34 @@
 import requests
 
-BASE_URL = "https://1xbet.com/LineFeed"
-
-def fetch_1xbet_data(endpoint):
+def get_onexbet_odds(live=True):
+    url = "https://1xbet.com/api/v1/live" if live else "https://1xbet.com/api/v1/line"
     try:
-        res = requests.get(endpoint, timeout=10)
+        res = requests.get(url, timeout=10)
         res.raise_for_status()
         data = res.json()
+
         results = []
-
-        for match in data.get("Value", []):
-            match_name = match.get("O1", "") + " vs " + match.get("O2", "")
-            markets = match.get("Markets", [])
-
-            for market in markets:
-                odds = {}
-                for outcome in market.get("E", []):
-                    odds[outcome.get("O", "")] = outcome.get("C", None)
-
-                results.append({
-                    "match": match_name.strip(),
-                    "market": market.get("T", "Unknown Market"),
-                    "bookmaker": "⚫ 1xBet",
-                    "odds": odds,
-                    "is_live": match.get("IsLive", False)
-                })
+        for event in data.get("events", []):
+            match_name = event.get("name", "Unknown Match")
+            for market in event.get("markets", []):
+                odds_dict = {}
+                for outcome in market.get("outcomes", []):
+                    odds_dict[outcome.get("name", "Unknown")] = float(outcome.get("odds", 0))
+                if odds_dict:
+                    results.append({
+                        "match": match_name,
+                        "market": market.get("name", "Unknown Market"),
+                        "bookmaker": "⚫ 1xBet",
+                        "odds": odds_dict,
+                        "is_live": live
+                    })
         return results
     except Exception as e:
-        print("[1xBet] Error:", e)
+        print(f"[1xBet {'LIVE' if live else 'PREMATCH'}] Error:", e)
         return []
 
-def get_1xbet_live_odds():
-    url = f"{BASE_URL}/Get1x2_VZip?sports=0&count=50&mode=4&country=1&partner=1&getEmpty=true&virtualSports=true"
-    return fetch_1xbet_data(url)
+def get_onexbet_live_odds():
+    return get_onexbet_odds(live=True)
 
-def get_1xbet_prematch_odds():
-    url = f"{BASE_URL}/Get1x2_VZip?sports=0&count=50&mode=4&country=1&partner=1&getEmpty=true&virtualSports=true"
-    return fetch_1xbet_data(url)
+def get_onexbet_prematch_odds():
+    return get_onexbet_odds(live=False)

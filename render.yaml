@@ -1,8 +1,13 @@
 services:
-  - type: cron
+  - type: worker
     name: arbitrage-bot
     env: python
-    plan: free
-    schedule: "*/5 * * * *"
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
+    plan: free
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+    schedule: "*/5 * * * *"

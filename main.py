@@ -1,70 +1,75 @@
 # Trigger auto-deploy on Render
-import requests
 import os
+import time
+import requests
 from datetime import datetime
+from dotenv import load_dotenv
 
-# Telegram credentials from environment
+load_dotenv()
+
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Profit threshold
-PROFIT_THRESHOLD = 10.0
-
-# Fetch odds from Oddspedia
-def get_oddspedia_odds():
+# ✅ Telegram send function
+def send_alert(message):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     try:
-        url = "https://oddspedia.com/api/v1/getOdds?bookmakers=1xbet,bc.game"
-        r = requests.get(url, timeout=10)
-        r.raise_for_status()
-        return r.json()
+        requests.post(url, json={"chat_id": CHAT_ID, "text": message})
     except Exception as e:
-        print("Oddspedia error:", e)
-        return None
+        print("Telegram Error:", e)
 
-# Fetch odds from Odds.am
-def get_oddsam_odds():
-    try:
-        url = "https://api.odds.am/v3/offer/surebets"
-        r = requests.get(url, timeout=10)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        print("Odds.am error:", e)
-        return None
+# ✅ Dummy functions - यहां आप Oddspedia और Odds.am scraping लगा सकते हो
+def get_1xbet_data():
+    return [
+        {"match": "Team A vs Team B", "market": "Match Winner", "bookmaker": "1xBet", "odds": 2.1, "is_live": True}
+    ]
 
-# Send Telegram alert
-def send_telegram_alert(message):
-    try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
-        requests.post(url, data=payload)
-    except Exception as e:
-        print("Telegram error:", e)
+def get_bcgame_data():
+    return [
+        {"match": "Team A vs Team B", "market": "Match Winner", "bookmaker": "BC.Game", "odds": 2.2, "is_live": True}
+    ]
 
-# Main arbitrage check
-def check_arbitrage():
-    data_oddspedia = get_oddspedia_odds()
-    data_oddsam = get_oddsam_odds()
+# ✅ Arbitrage detection
+def check_arbitrage(data1, data2):
+    arbitrages = []
+    for a in data1:
+        for b in data2:
+            if a['match'] == b['match'] and a['market'] == b['market'] and a['bookmaker'] != b['bookmaker']:
+                inv1 = 1 / a['odds']
+                inv2 = 1 / b['odds']
+                total = inv1 + inv2
+                if total < 1:
+                    profit = round((1 - total) * 100, 2)
+                    arbitrages.append({
+                        "match": a['match'],
+                        "market": a['market'],
+                        "odds": f"{a['bookmaker']} {a['odds']} | {b['bookmaker']} {b['odds']}",
+                        "profit": profit,
+                        "is_live": a['is_live'] or b['is_live']
+                    })
+    return arbitrages
 
-    opportunities = []
+# ✅ Loop for continuous checking
+def main():
+    while True:
+        one_x = get_1xbet_data()
+        bc_game = get_bcgame_data()
+        arbs = check_arbitrage(one_x, bc_game)
 
-    if data_oddspedia:
-        for item in data_oddspedia.get("data", []):
-            profit = item.get("profit", 0)
-            if profit >= PROFIT_THRESHOLD:
-                opportunities.append(f"🟢 <b>{item['sport']}</b>\nProfit: {profit}%\nSource: Oddspedia")
+        for arb in arbs:
+            if arb['profit'] >= 10:
+                emoji = "🟢" if arb['is_live'] else "🔵"
+                now = datetime.now().strftime("%d-%m-%Y %I:%M %p")
+                msg = f"""{emoji} Arbitrage Alert!
+🏟️ Match: {arb['match']}
+🎯 Market: {arb['market']}
+💰 Odds: {arb['odds']}
+📈 Profit: {arb['profit']}%
+🕒 Time: {now}"""
+                send_alert(msg)
 
-    if data_oddsam:
-        for item in data_oddsam.get("data", []):
-            profit = item.get("profit", 0)
-            if profit >= PROFIT_THRESHOLD:
-                opportunities.append(f"🟢 <b>{item['sport']}</b>\nProfit: {profit}%\nSource: Odds.am")
-
-    if opportunities:
-        message = "🔥 <b>Arbitrage Opportunities</b> 🔥\n\n" + "\n\n".join(opportunities)
-        send_telegram_alert(message)
-    else:
-        print("No opportunities found.")
+        print(f"[{datetime.now()}] Checked arbitrage. Sleeping 5 mins...")
+        time.sleep(300)  # 5 min wait
 
 if __name__ == "__main__":
-    check_arbitrage()
+    main()

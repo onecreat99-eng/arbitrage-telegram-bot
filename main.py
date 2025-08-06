@@ -1,41 +1,70 @@
 # Trigger auto-deploy on Render
-import os
-import datetime
 import requests
-from dotenv import load_dotenv
-from oddspedia_scraper import get_oddspedia_surebets
-from oddsam_scraper import get_oddsam_odds
+import os
+from datetime import datetime
 
-load_dotenv()
-
+# Telegram credentials from environment
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-MAX_ALERTS_PER_DAY = 8
 
-sent = set()
+# Profit threshold
+PROFIT_THRESHOLD = 10.0
 
-def send_alert(msg):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": CHAT_ID, "text": msg})
+# Fetch odds from Oddspedia
+def get_oddspedia_odds():
+    try:
+        url = "https://oddspedia.com/api/v1/getOdds?bookmakers=1xbet,bc.game"
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        print("Oddspedia error:", e)
+        return None
 
-def main():
-    alerts = 0
-    odds_am = get_oddsam_odds()
-    oddsp = get_oddspedia_surebets()
+# Fetch odds from Odds.am
+def get_oddsam_odds():
+    try:
+        url = "https://api.odds.am/v3/offer/surebets"
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        print("Odds.am error:", e)
+        return None
 
-    for arb in odds_am:
-        key = (arb['match'], arb['market'], arb['bookmaker1'], arb['bookmaker2'])
-        if arb['profit'] >= 10 and key not in sent:
-            sent.add(key)
-            alerts += 1
-            msg = (f"💥 Arbitrage {arb['market']} {arb['match']}\n"
-                   f"{arb['bookmaker1']}: {arb['odds1']} | {arb['bookmaker2']}: {arb['odds2']}\n"
-                   f"📈 Profit: {arb['profit']}%\n"
-                   f"{'🟢 Live' if arb['is_live'] else '🔵 Prematch'}\n"
-                   f"🕒 {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            send_alert(msg)
-        if alerts >= MAX_ALERTS_PER_DAY:
-            break
+# Send Telegram alert
+def send_telegram_alert(message):
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
+        requests.post(url, data=payload)
+    except Exception as e:
+        print("Telegram error:", e)
+
+# Main arbitrage check
+def check_arbitrage():
+    data_oddspedia = get_oddspedia_odds()
+    data_oddsam = get_oddsam_odds()
+
+    opportunities = []
+
+    if data_oddspedia:
+        for item in data_oddspedia.get("data", []):
+            profit = item.get("profit", 0)
+            if profit >= PROFIT_THRESHOLD:
+                opportunities.append(f"🟢 <b>{item['sport']}</b>\nProfit: {profit}%\nSource: Oddspedia")
+
+    if data_oddsam:
+        for item in data_oddsam.get("data", []):
+            profit = item.get("profit", 0)
+            if profit >= PROFIT_THRESHOLD:
+                opportunities.append(f"🟢 <b>{item['sport']}</b>\nProfit: {profit}%\nSource: Odds.am")
+
+    if opportunities:
+        message = "🔥 <b>Arbitrage Opportunities</b> 🔥\n\n" + "\n\n".join(opportunities)
+        send_telegram_alert(message)
+    else:
+        print("No opportunities found.")
 
 if __name__ == "__main__":
-    main()
+    check_arbitrage()

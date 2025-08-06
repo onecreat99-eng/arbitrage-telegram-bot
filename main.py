@@ -1,56 +1,90 @@
 # Trigger auto-deploy on Render
-import os
 import telebot
+import requests
+import os
+from apscheduler.schedulers.blocking import BlockingScheduler
 from datetime import datetime
+import pytz
 
-# ✅ Read bot token & chat ID from environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-# ✅ Check if token is available
-if not BOT_TOKEN or not CHAT_ID:
-    raise ValueError("BOT_TOKEN or CHAT_ID is missing!")
-
 bot = telebot.TeleBot(BOT_TOKEN)
 
+sent_alerts = 0  # global count
+
 def get_arbitrage_data():
-    return {
-        "type": "LIVE",
-        "bookmakers": [
-            {"name": "1xBet", "odds": 2.1},
-            {"name": "Stake", "odds": 2.2}
-        ],
-        "profit": 10.5,
-        "match": "ABC vs XYZ",
-        "market": "Fulltime Result"
-    }
+    # Dummy arbitrage data (replace this with actual scraping logic)
+    return [
+        {
+            "match": "Team A 🆚 Team B",
+            "market": "Fulltime Result",
+            "odds": {
+                "⚫ 1xBet": 2.1,
+                "⚫ Mostbet": 1.95
+            },
+            "profit": 10.4,
+            "match_type": "🟢 Live",
+            "same_bookmaker": False
+        },
+        {
+            "match": "Team C 🆚 Team D",
+            "market": "Over/Under 2.5",
+            "odds": {
+                "⚫ Stake": 2.05,
+                "⚫ VBet": 1.98
+            },
+            "profit": 11.3,
+            "match_type": "🔵 Prematch",
+            "same_bookmaker": False
+        }
+    ]
 
-def send_alert(data):
-    emojis = {
-        "LIVE": "🟢",
-        "PREMATCH": "🔵",
-        "SAME": "🔴",
-        "BOOK": "⚫",
-        "PROFIT": "💰",
-        "TIME": "⏰",
-        "MARKET": "📊",
-        "DATE": "🗓️"
-    }
-    time_str = datetime.now().strftime("%d-%m-%Y %I:%M %p")
-    message = f"{emojis[data['type']]} {data['type']} Arbitrage Found!\n"
-    for bm in data['bookmakers']:
-        message += f"{emojis['BOOK']} {bm['name']}: {bm['odds']}\n"
-    message += f"{emojis['MARKET']} Market: {data['market']}\n"
-    message += f"{emojis['PROFIT']} Profit: {data['profit']}%\n"
-    message += f"{emojis['TIME']} Match: {data['match']}\n"
-    message += f"{emojis['DATE']} {time_str}"
-    bot.send_message(chat_id=CHAT_ID, text=message)
+def send_telegram_alert(data):
+    match = data["match"]
+    market = data["market"]
+    odds = data["odds"]
+    profit = data["profit"]
+    match_type = data["match_type"]
+    same = "🔴 Same Bookmaker" if data["same_bookmaker"] else "🟡 Cross Bookmaker"
 
-# ✅ Run once to test
-if __name__ == "__main__":
+    now = datetime.now(pytz.timezone("Asia/Kolkata"))
+    time_str = now.strftime("%H:%M:%S | %d-%m-%Y")
+
+    message = (
+        f"{match_type} *Arbitrage Alert!*\n\n"
+        f"*Match:* {match}\n"
+        f"*Market:* {market}\n"
+        f"*Odds:* {' vs '.join([f'{k} @ {v}' for k, v in odds.items()])}\n"
+        f"*Profit:* {profit:.2f}%\n"
+        f"*Type:* {same}\n"
+        f"*Time:* {time_str}"
+    )
+    bot.send_message(CHAT_ID, message, parse_mode="Markdown")
+
+def check_and_send_alerts():
+    global sent_alerts
+    if sent_alerts >= 4:
+        print("🔴 Daily alert limit reached")
+        return
+
     data = get_arbitrage_data()
-    send_alert(data)
-import time
+    for arb in data:
+        if arb["profit"] >= 10 and sent_alerts < 4:
+            send_telegram_alert(arb)
+            sent_alerts += 1
+            print(f"✅ Alert sent ({sent_alerts})")
+        else:
+            print("ℹ️ Skipped: Profit below 10% or limit reached")
 
-while True:
-    time.sleep(60)
+def reset_alert_count():
+    global sent_alerts
+    sent_alerts = 0
+    print("🔄 Daily alert count reset")
+
+scheduler = BlockingScheduler(timezone="Asia/Kolkata")
+scheduler.add_job(check_and_send_alerts, 'interval', minutes=5)
+scheduler.add_job(reset_alert_count, 'cron', hour=0, minute=0)
+
+print("🚀 Bot started...")
+scheduler.start()

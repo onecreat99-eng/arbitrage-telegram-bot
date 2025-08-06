@@ -1,33 +1,43 @@
 import requests
-from bs4 import BeautifulSoup
 
-def get_vbet_matches():
-    url = "https://www.vbet.com/en/sports"
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "Accept-Language": "en-US,en;q=0.9",
-    }
+def get_vbet_matches(live=True):
+    url = "https://www.vbet.com/sportsbook/api/events/"
+    url += "live" if live else "prematch"
 
     try:
-        session = requests.Session()
-        response = session.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
+        res = requests.get(url, timeout=10)
+        res.raise_for_status()
+        data = res.json()
 
-        soup = BeautifulSoup(response.text, 'html.parser')
-        matches = []
+        results = []
+        for match in data.get("events", []):
+            match_name = match.get("name", "Unknown Match")
+            markets = match.get("markets", [])
+            odds = {}
 
-        for event in soup.select(".sports-events-list-item"):
-            match_name = event.get_text(strip=True)
-            matches.append({"match": match_name})
+            for market in markets:
+                market_name = market.get("name", "")
+                for outcome in market.get("selections", []):
+                    key = f"{market_name} - {outcome.get('name', '')}"
+                    odds["VBet"] = outcome.get("price", 0)
 
-        return matches
+            if odds:
+                results.append({
+                    "bookmaker": "VBet",
+                    "match": match_name,
+                    "market": market_name,
+                    "odds": odds,
+                    "is_live": live
+                })
+
+        return results
 
     except Exception as e:
-        print("VBet Scraper Error:", e)
+        print(f"[VBET {'LIVE' if live else 'PREMATCH'}] Error:", e)
         return []
 
-if __name__ == "__main__":
-    data = get_vbet_matches()
-    for match in data[:5]:
-        print("🎯 Match:", match["match"])
+def get_vbet_live_odds():
+    return get_vbet_matches(live=True)
+
+def get_vbet_prematch_odds():
+    return get_vbet_matches(live=False)

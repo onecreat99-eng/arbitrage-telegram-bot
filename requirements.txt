@@ -1,3 +1,4 @@
 requests
 APScheduler
 python-telegram-bot==22.3
+pyTelegramBotAPI==4.14.0

@@ -1,30 +1,44 @@
 import requests
 
-BASE_URL = "https://stake-data.example/api"  # यहां असली API/endpoint डालना होगा
+def get_stake_odds():
+    results = []
 
-def get_stake_odds(live=True):
-    url = f"{BASE_URL}/live" if live else f"{BASE_URL}/prematch"
     try:
-        res = requests.get(url, timeout=10)
-        res.raise_for_status()
-        data = res.json()
+        # Live odds
+        live_url = "https://stake.com/api/sports/live"
+        live_data = requests.get(live_url, timeout=10).json()
+        for sport in live_data.get("sports", []):
+            for match in sport.get("events", []):
+                results.append({
+                    "bookmaker": "Stake",
+                    "type": "Live",
+                    "match": match.get("home") + " vs " + match.get("away"),
+                    "market": "Fulltime Result",
+                    "odds": [
+                        match["markets"][0]["selections"][0]["price"],
+                        match["markets"][0]["selections"][1]["price"],
+                        match["markets"][0]["selections"][2]["price"]
+                    ]
+                })
 
-        results = []
-        for match in data.get("matches", []):
-            results.append({
-                "match": match.get("name", "Unknown Match"),
-                "market": match.get("market", "Unknown Market"),
-                "bookmaker": "⚫ Stake",
-                "odds": match.get("odds", {}),
-                "is_live": live
-            })
-        return results
+        # Prematch odds
+        pre_url = "https://stake.com/api/sports/upcoming"
+        pre_data = requests.get(pre_url, timeout=10).json()
+        for sport in pre_data.get("sports", []):
+            for match in sport.get("events", []):
+                results.append({
+                    "bookmaker": "Stake",
+                    "type": "Prematch",
+                    "match": match.get("home") + " vs " + match.get("away"),
+                    "market": "Fulltime Result",
+                    "odds": [
+                        match["markets"][0]["selections"][0]["price"],
+                        match["markets"][0]["selections"][1]["price"],
+                        match["markets"][0]["selections"][2]["price"]
+                    ]
+                })
+
     except Exception as e:
-        print(f"[Stake {'LIVE' if live else 'PREMATCH'}] Error:", e)
-        return []
+        print(f"[Stake ERROR] {e}")
 
-def get_stake_live_odds():
-    return get_stake_odds(live=True)
-
-def get_stake_prematch_odds():
-    return get_stake_odds(live=False)
+    return results

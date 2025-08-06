@@ -38,7 +38,7 @@ def run_bot():
         )
 
         if not data:
-            send_telegram_alert("⚠️ No odds found.")
+            send_telegram_alert("⚠ कोई Odds Data नहीं मिला।")
             return
 
         alerts_sent = 0
@@ -51,10 +51,10 @@ def run_bot():
                     match_a["bookmaker"] != match_b["bookmaker"]
                 ):
                     for team in match_a["odds"]:
-                        if match_a["odds"][team] and team in match_b["odds"] and match_b["odds"][team]:
+                        if team in match_b["odds"] and match_a["odds"][team] and match_b["odds"][team]:
                             profit = calculate_profit(match_a["odds"][team], match_b["odds"][team])
                             if profit >= 10:
-                                match_type = "🟢 Live" if match_a["type"] == "Live" else "🔵 Prematch"
+                                match_type = "🟢 Live" if match_a["is_live"] else "🔵 Prematch"
                                 time_now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
                                 message = (
                                     f"{match_type} Arbitrage Found\n"

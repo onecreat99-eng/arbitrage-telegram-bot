@@ -2,5 +2,11 @@ services:
   - type: web
     name: arbitrage-bot
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: ""
     startCommand: python main.py
+    plan: free
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        value: your_bot_token_here
+      - key: TELEGRAM_CHAT_ID
+        value: your_chat_id_here
